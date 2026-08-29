@@ -9,7 +9,7 @@ function App() {
   const [monthKey, setMonthKey] = useState('2026-08');
   const [monthStatus, setMonthStatus] = useState('open');
   const [activeProposalInfo, setActiveProposalInfo] = useState(null);
-  const [activeTab, setActiveTab] = useState('summary'); // 'summary' | 'config' | 'analytics' | 'proposals'
+  const [activeTab, setActiveTab] = useState('summary');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRep, setSelectedRep] = useState(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -17,13 +17,13 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [analyticsSortBy, setAnalyticsSortBy] = useState('highestPct');
 
-  // الشروط والقواعد الرسمية المعتمدة للحسابات
-  const [generalRules, setGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES);[cite: 5]
-  const [groupRules, setGroupRules] = useState(CONFIG.FALLBACK_GROUPS);[cite: 5]
+  // الشروط والقواعد الرسمية المعتمدة
+  const [generalRules, setGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES);
+  const [groupRules, setGroupRules] = useState(CONFIG.FALLBACK_GROUPS);
 
-  // بيانات المطبخ التجريبي (نسخة مستقلة للمحاكاة قبل الرفع)
-  const [kitchenGeneralRules, setKitchenGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES);[cite: 5]
-  const [kitchenGroupRules, setKitchenGroupRules] = useState(CONFIG.FALLBACK_GROUPS);[cite: 5]
+  // بيانات المطبخ التجريبي المستقل
+  const [kitchenGeneralRules, setKitchenGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES);
+  const [kitchenGroupRules, setKitchenGroupRules] = useState(CONFIG.FALLBACK_GROUPS);
   const [isKitchenApplied, setIsKitchenApplied] = useState(false);
 
   const [repsData, setRepsData] = useState([]);
@@ -38,7 +38,7 @@ function App() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginLoading(true);
-    const res = await AuthService.login(usernameInput, passwordInput);[cite: 3]
+    const res = await AuthService.login(usernameInput, passwordInput);
     if (res && res.status === 'success') {
       setCurrentUser(res.user);
       showToast(`مرحباً بك: ${res.user.fullName}`);
@@ -53,7 +53,7 @@ function App() {
     setSyncLoading(true);
     const activeUser = user || currentUser;
     try {
-      const data = await ApiService.fetchWorkspace(activeUser.role, activeUser.userId, monthKey);[cite: 6]
+      const data = await ApiService.fetchWorkspace(activeUser.role, activeUser.userId, monthKey);
       if (data && data.status === 'success') {
         if (data.generalRules) {
           setGeneralRules(data.generalRules);
@@ -76,7 +76,6 @@ function App() {
     setSyncLoading(false);
   };
 
-  // رفع المقترح من المطبخ للإدارة
   const handleSaveProposal = async () => {
     setSyncLoading(true);
     try {
@@ -84,8 +83,8 @@ function App() {
         generalRules: kitchenGeneralRules,
         groupRules: kitchenGroupRules
       };
-      const res = await ApiService.saveProposal(monthKey, proposalPayload, currentUser);[cite: 6]
-      showToast(res.message || 'تم رفع مقترح المطبخ بنجاح بانتظار اعتماد المدير العام');
+      const res = await ApiService.saveProposal(monthKey, proposalPayload, currentUser);
+      showToast(res.message || 'تم رفع مقترح المطبخ للإدارة بنجاح');
       setMonthStatus('pending_approval');
       loadData(currentUser);
     } catch (err) {
@@ -95,7 +94,6 @@ function App() {
     setSyncLoading(false);
   };
 
-  // الاعتماد النهائي والترحيل من قبل المدير العام
   const handleApproveMonth = async () => {
     if (currentUser.role !== 'manager') {
       showToast('صلاحية الاعتماد النهائي محصورة بالمدير العام فقط');
@@ -103,8 +101,8 @@ function App() {
     }
     setSyncLoading(true);
     try {
-      const res = await ApiService.approveMonth(monthKey, currentUser);[cite: 6]
-      showToast(res.message || 'تم الاعتماد النهائي وإقفال الشهر المالي بنجاح 🔒');
+      const res = await ApiService.approveMonth(monthKey, currentUser);
+      showToast(res.message || 'تم الاعتماد النهائي وإقفال الشهر المالي 🔒');
       setMonthStatus('approved');
       loadData(currentUser);
     } catch (err) {
@@ -127,14 +125,13 @@ function App() {
     setSyncLoading(false);
   };
 
-  // تطبيق القواعد النشطة (إما الرسمية أو التجريبية بالمطبخ عند المعاينة)
   const activeGeneralRules = isKitchenApplied ? kitchenGeneralRules : generalRules;
   const activeGroupRules = isKitchenApplied ? kitchenGroupRules : groupRules;
 
   const processedReps = useMemo(() => {
     if (!Array.isArray(repsData)) return [];
     return repsData
-      .map(rep => CalcEngine.processRepData(rep, activeGeneralRules, activeGroupRules))[cite: 4]
+      .map(rep => CalcEngine.processRepData(rep, activeGeneralRules, activeGroupRules))
       .filter(Boolean);
   }, [repsData, activeGeneralRules, activeGroupRules]);
 
@@ -154,14 +151,12 @@ function App() {
     return processedReps.filter(r => (r.name && r.name.includes(searchTerm)) || (r.id && r.id.toString().includes(searchTerm)));
   }, [processedReps, currentUser, searchTerm]);
 
-  // تحديثات المطبخ التجريبي
   const updateKitchenGroup = (idx, field, val) => {
     const updated = [...kitchenGroupRules];
     updated[idx] = { ...updated[idx], [field]: val };
     setKitchenGroupRules(updated);
   };
 
-  // تحديثات الشروط الرسمية (خاصة بالمدير العام)
   const updateOfficialGroup = (idx, field, val) => {
     const updated = [...groupRules];
     updated[idx] = { ...updated[idx], [field]: val };
@@ -351,7 +346,6 @@ function App() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 mt-6">
-        {/* بطاقات الإجماليات */}
         {currentUser.role !== 'rep' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
@@ -476,7 +470,7 @@ function App() {
           </div>
         )}
 
-        {/* Tab 2: الإعدادات الرسمية المعتمدة (التي يعتمدها المدير العام) */}
+        {/* Tab 2: الإعدادات الرسمية المعتمدة */}
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="space-y-6">
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
@@ -613,7 +607,7 @@ function App() {
           </div>
         )}
 
-        {/* Tab 3: مطبخ التخطيط والمحاكاة التجريبية (خاص بالمشرف للتجربة والرفع) */}
+        {/* Tab 3: مطبخ التخطيط والمحاكاة التجريبية */}
         {activeTab === 'proposals' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-2xl border border-purple-500/40 shadow-2xl space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
@@ -644,7 +638,6 @@ function App() {
               </div>
             </div>
 
-            {/* تعديل شروط المطبخ */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                 <label className="text-xs font-bold text-purple-300 block mb-1">تجربة شرط الهدف العام (%)</label>
@@ -675,7 +668,6 @@ function App() {
               </div>
             </div>
 
-            {/* شبكة مجموعات المطبخ */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {kitchenGroupRules.map((grp, idx) => (
                 <div key={idx} className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
