@@ -4,29 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>نظام إدارة الأهداف والعمولات الشامل</title>
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React & ReactDOM CDN -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <!-- Babel for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Google Fonts Cairo -->
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/custom.css">
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
   <div id="root"></div>
 
-  <!-- استدعاء وحدات المنطق -->
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/calculations.js"></script>
 
-  <!-- تطبيق React الرئيسي -->
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
@@ -38,9 +31,11 @@
 
       const [monthKey, setMonthKey] = useState('2026-08');
       const [monthStatus, setMonthStatus] = useState('open');
+      const [activeProposalInfo, setActiveProposalInfo] = useState(null);
       const [activeTab, setActiveTab] = useState('summary');
       const [searchTerm, setSearchTerm] = useState('');
       const [selectedRep, setSelectedRep] = useState(null);
+      const [showAuditModal, setShowAuditModal] = useState(false);
       const [notification, setNotification] = useState('');
       const [syncLoading, setSyncLoading] = useState(false);
 
@@ -78,6 +73,7 @@
             if (data.groupRules && Array.isArray(data.groupRules) && data.groupRules.length) setGroupRules(data.groupRules);
             if (data.reps && Array.isArray(data.reps) && data.reps.length) setRepsData(data.reps);
             if (data.monthStatus) setMonthStatus(data.monthStatus);
+            if (data.activeProposal) setActiveProposalInfo(data.activeProposal);
             showToast('تمت المزامنة بنجاح مع Google Sheets');
           }
         } catch (err) {
@@ -90,8 +86,9 @@
         setSyncLoading(true);
         try {
           const res = await ApiService.saveProposal(monthKey, { groupRules, repsData, generalRules }, currentUser);
-          showToast(res.message || 'تم حفظ المقترح');
+          showToast(res.message || 'تم حفظ المقترح ورفعه للإدارة');
           setMonthStatus('pending_approval');
+          loadData(currentUser);
         } catch (err) {
           showToast('تم حفظ المقترح محلياً');
           setMonthStatus('pending_approval');
@@ -100,16 +97,27 @@
       };
 
       const handleApproveMonth = async () => {
+        if (currentUser.role !== 'manager') {
+          showToast('عذراً، صلاحية الاعتماد محصورة بالمدير العام فقط');
+          return;
+        }
         setSyncLoading(true);
         try {
           const res = await ApiService.approveMonth(monthKey, currentUser);
-          showToast(res.message || 'تم اعتماد الشهر بنجاح');
+          showToast(res.message || 'تم اعتماد الشهر وقفل الحسابات بنجاح');
           setMonthStatus('approved');
+          loadData(currentUser);
         } catch (err) {
           showToast('تم اعتماد الشهر محلياً');
           setMonthStatus('approved');
         }
         setSyncLoading(false);
+      };
+
+      const handleUnlockMonth = () => {
+        if (currentUser.role !== 'manager') return;
+        setMonthStatus('open');
+        showToast('تم فتح الشهر للتعديل مجدداً من قبل المدير العام');
       };
 
       const processedReps = useMemo(() => {
@@ -211,14 +219,22 @@
                 <div>
                   <div className="flex items-center gap-2">
                     <h1 className="text-lg font-black text-white">نظام الأهداف والعمولات</h1>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      monthStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    }`}>
-                      {monthStatus === 'approved' ? 'معتمد 🔒' : 'قيد التخطيط ✍️'}
-                    </span>
+                    <button
+                      onClick={() => setShowAuditModal(true)}
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 transition-all ${
+                        monthStatus === 'approved'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                          : monthStatus === 'pending_approval'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30'
+                      }`}
+                    >
+                      <i className="fa-solid fa-circle-info"></i>
+                      <span>{monthStatus === 'approved' ? 'معتمد ومقفل 🔒' : monthStatus === 'pending_approval' ? 'بانتظار الاعتماد ⏳' : 'قيد التخطيط ✍️'}</span>
+                    </button>
                   </div>
                   <p className="text-xs text-slate-400">
-                    المستخدم: <b className="text-emerald-400">{currentUser.fullName}</b> ({currentUser.role})
+                    المستخدم: <b className="text-emerald-400">{currentUser.fullName}</b> ({currentUser.role === 'manager' ? 'المدير العام' : currentUser.role === 'supervisor' ? 'مشرف المبيعات' : 'مندوب مبيعات'})
                   </p>
                 </div>
               </div>
@@ -236,19 +252,31 @@
                 {currentUser.role === 'supervisor' && monthStatus !== 'approved' && (
                   <button
                     onClick={handleSaveProposal}
-                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl"
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md shadow-purple-600/20"
                   >
-                    رفع المقترح
+                    <i className="fa-solid fa-paper-plane"></i>
+                    <span>رفع المقترح للإدارة</span>
                   </button>
                 )}
 
                 {currentUser.role === 'manager' && (
-                  <button
-                    onClick={handleApproveMonth}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl"
-                  >
-                    اعتماد الشهر 🔒
-                  </button>
+                  monthStatus === 'approved' ? (
+                    <button
+                      onClick={handleUnlockMonth}
+                      className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md"
+                    >
+                      <i className="fa-solid fa-lock-open"></i>
+                      <span>فتح التعديل مجدداً</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleApproveMonth}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+                    >
+                      <i className="fa-solid fa-stamp"></i>
+                      <span>اعتماد وترحيل النهائي 🔒</span>
+                    </button>
+                  )
                 )}
 
                 <button
@@ -487,6 +515,7 @@
             )}
           </main>
 
+          {/* نافذة تفاصيل المندوب */}
           {selectedRep && (
             <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4">
@@ -532,6 +561,59 @@
                   <button
                     onClick={() => setSelectedRep(null)}
                     className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-2 rounded-xl text-xs"
+                  >
+                    إغلاق
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* نافذة التراكر والرقابة (Audit Tracker Modal) */}
+          {showAuditModal && (
+            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <i className="fa-solid fa-fingerprint text-emerald-400"></i> سجل التتبع والاعتماد (Tracker)
+                  </h3>
+                  <button onClick={() => setShowAuditModal(false)} className="text-slate-400 hover:text-white">
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                    <span className="text-slate-400 block mb-1">حالة الشهر المالي:</span>
+                    <span className="font-bold text-emerald-400 font-mono text-sm">
+                      {monthStatus === 'approved' ? 'معتمد ومقفل نهائياً 🔒' : 'قيد المراجعة والتعديل ✍️'}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">مقدم المقترح:</span>
+                      <span className="font-bold text-white">{activeProposalInfo ? activeProposalInfo.submittedBy : 'المشرف'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">وقت الرفع:</span>
+                      <span className="font-mono text-slate-300">{activeProposalInfo ? activeProposalInfo.submissionDate : '-'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">المدير المعتمد:</span>
+                      <span className="font-bold text-emerald-300">{activeProposalInfo && activeProposalInfo.approvedBy ? activeProposalInfo.approvedBy : 'بانتظار الاعتماد'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">تاريخ الاعتماد:</span>
+                      <span className="font-mono text-slate-300">{activeProposalInfo && activeProposalInfo.approvalDate ? activeProposalInfo.approvalDate : '-'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setShowAuditModal(false)}
+                    className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2 rounded-xl text-xs"
                   >
                     إغلاق
                   </button>
