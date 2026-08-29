@@ -44,9 +44,9 @@
       const [notification, setNotification] = useState('');
       const [syncLoading, setSyncLoading] = useState(false);
 
-      const [groupRules, setGroupRules] = useState(CONFIG.FALLBACK_GROUPS);
-      const [repsData, setRepsData] = useState(CONFIG.FALLBACK_REPS);
-      const [generalRules, setGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES);
+      const [groupRules, setGroupRules] = useState(CONFIG.FALLBACK_GROUPS || []);
+      const [repsData, setRepsData] = useState(CONFIG.FALLBACK_REPS || []);
+      const [generalRules, setGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES || {});
 
       const showToast = (msg) => {
         setNotification(msg);
@@ -59,12 +59,12 @@
         e.preventDefault();
         setLoginLoading(true);
         const res = await AuthService.login(usernameInput, passwordInput);
-        if (res.status === 'success') {
+        if (res && res.status === 'success') {
           setCurrentUser(res.user);
-          showToast(`مرحباً بك: ${res.user.fullName}`);
+          showToast(`مرحباً: ${res.user.fullName}`);
           loadData(res.user);
         } else {
-          showToast(`خطأ: ${res.message}`);
+          showToast(`خطأ: ${res ? res.message : 'فشل الدخول'}`);
         }
         setLoginLoading(false);
       };
@@ -73,13 +73,15 @@
         setSyncLoading(true);
         try {
           const data = await ApiService.fetchWorkspace(user.role, user.userId, monthKey);
-          if (data.generalRules) setGeneralRules(data.generalRules);
-          if (data.groupRules && data.groupRules.length) setGroupRules(data.groupRules);
-          if (data.reps && data.reps.length) setRepsData(data.reps);
-          if (data.monthStatus) setMonthStatus(data.monthStatus);
-          showToast('تمت المزامنة بنجاح مع Google Sheets');
+          if (data) {
+            if (data.generalRules) setGeneralRules(data.generalRules);
+            if (data.groupRules && Array.isArray(data.groupRules) && data.groupRules.length) setGroupRules(data.groupRules);
+            if (data.reps && Array.isArray(data.reps) && data.reps.length) setRepsData(data.reps);
+            if (data.monthStatus) setMonthStatus(data.monthStatus);
+            showToast('تمت المزامنة بنجاح مع Google Sheets');
+          }
         } catch (err) {
-          console.warn('Network issue, working offline');
+          console.warn('Network issue, using fallback data');
         }
         setSyncLoading(false);
       };
@@ -111,7 +113,10 @@
       };
 
       const processedReps = useMemo(() => {
-        return repsData.map(rep => CalcEngine.processRepData(rep, generalRules, groupRules));
+        if (!Array.isArray(repsData)) return [];
+        return repsData
+          .map(rep => CalcEngine.processRepData(rep, generalRules, groupRules))
+          .filter(Boolean);
       }, [repsData, generalRules, groupRules]);
 
       const companyTotals = useMemo(() => {
@@ -120,14 +125,14 @@
         let qualifiedRepsCount = 0;
 
         processedReps.forEach(r => {
-          genTarget += r.generalTarget;
-          genSales += r.generalSales;
-          debt += r.debt;
-          collection += r.collection;
-          collComm += r.collectionCommission;
-          groupCommSum += r.totalGroupCommissionEarned;
-          genTargetCommSum += r.generalTargetCommEarned;
-          grandComm += r.grandTotalCommission;
+          genTarget += r.generalTarget || 0;
+          genSales += r.generalSales || 0;
+          debt += r.debt || 0;
+          collection += r.collection || 0;
+          collComm += r.collectionCommission || 0;
+          groupCommSum += r.totalGroupCommissionEarned || 0;
+          genTargetCommSum += r.generalTargetCommEarned || 0;
+          grandComm += r.grandTotalCommission || 0;
           if (r.isFullyEligibleForGroupComm) qualifiedRepsCount++;
         });
 
@@ -143,7 +148,7 @@
         if (currentUser.role === 'rep') {
           return processedReps.filter(r => Number(r.id) === Number(currentUser.userId));
         }
-        return processedReps.filter(r => r.name.includes(searchTerm) || r.id.toString().includes(searchTerm));
+        return processedReps.filter(r => (r.name && r.name.includes(searchTerm)) || (r.id && r.id.toString().includes(searchTerm)));
       }, [processedReps, currentUser, searchTerm]);
 
       if (!currentUser) {
@@ -264,6 +269,14 @@
                   }`}
                 >
                   خلاصة المندوبين
+                </button>
+                <button
+                  onClick={() => setActiveTab('config')}
+                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs ${
+                    activeTab === 'config' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 text-slate-300'
+                  }`}
+                >
+                  إعدادات الشروط والتحصيل
                 </button>
                 <button
                   onClick={() => setActiveTab('proposals')}
@@ -390,6 +403,43 @@
               </div>
             )}
 
+            {activeTab === 'config' && currentUser.role !== 'rep' && (
+              <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-sliders text-amber-400"></i> إعدادات القواعد العامة وشروط التأهل
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                    <label className="text-xs font-bold text-slate-300 block mb-1">نسبة شرط الهدف العام (%)</label>
+                    <input
+                      type="number"
+                      value={generalRules.generalThresholdPct || 80}
+                      onChange={(e) => setGeneralRules({ ...generalRules, generalThresholdPct: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-emerald-400 text-center"
+                    />
+                  </div>
+                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                    <label className="text-xs font-bold text-slate-300 block mb-1">عمولة الهدف العام (ر.س)</label>
+                    <input
+                      type="number"
+                      value={generalRules.generalTargetCommValue || 500}
+                      onChange={(e) => setGeneralRules({ ...generalRules, generalTargetCommValue: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-amber-300 text-center font-mono"
+                    />
+                  </div>
+                  <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                    <label className="text-xs font-bold text-slate-300 block mb-1">أدنى عدد مجموعات مطلوبة</label>
+                    <input
+                      type="number"
+                      value={generalRules.minGroupsRequired || 7}
+                      onChange={(e) => setGeneralRules({ ...generalRules, minGroupsRequired: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-teal-300 text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'proposals' && currentUser.role !== 'rep' && (
               <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -462,7 +512,7 @@
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700 font-mono">
-                      {selectedRep.detailedGroups.map((grp, idx) => (
+                      {(selectedRep.detailedGroups || []).map((grp, idx) => (
                         <tr key={idx} className={grp.isQualified ? 'bg-emerald-950/20' : ''}>
                           <td className="p-2.5 font-sans font-bold text-white">{grp.name}</td>
                           <td className="p-2.5">{formatNum(grp.target)}</td>
