@@ -17,11 +17,11 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [analyticsSortBy, setAnalyticsSortBy] = useState('highestPct');
 
-  // الشروط والقواعد الرسمية المعتمدة
+  // القواعد الرسمية المعتمدة
   const [generalRules, setGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES);
   const [groupRules, setGroupRules] = useState(CONFIG.FALLBACK_GROUPS);
 
-  // بيانات المطبخ التجريبي المستقل
+  // قواعد المطبخ التجريبي المستقل
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES);
   const [kitchenGroupRules, setKitchenGroupRules] = useState(CONFIG.FALLBACK_GROUPS);
   const [isKitchenApplied, setIsKitchenApplied] = useState(false);
@@ -84,11 +84,11 @@ function App() {
         groupRules: kitchenGroupRules
       };
       const res = await ApiService.saveProposal(monthKey, proposalPayload, currentUser);
-      showToast(res.message || 'تم رفع مقترح المطبخ للإدارة بنجاح');
+      showToast(res.message || 'تم رفع مقترح المطبخ بنجاح للإدارة');
       setMonthStatus('pending_approval');
       loadData(currentUser);
     } catch (err) {
-      showToast('تم حفظ المقترح محلياً');
+      showToast('تم حفظ المقترح');
       setMonthStatus('pending_approval');
     }
     setSyncLoading(false);
@@ -214,7 +214,6 @@ function App() {
 
   return (
     <div className="pb-16 dir-rtl">
-      {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md p-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -337,14 +336,12 @@ function App() {
         )}
       </header>
 
-      {/* Toast Notification */}
       {notification && (
         <div className="fixed bottom-5 left-5 z-50 bg-emerald-500 text-slate-950 px-4 py-3 rounded-2xl shadow-2xl font-bold animate-bounce">
           {notification}
         </div>
       )}
 
-      {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 mt-6">
         {currentUser.role !== 'rep' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
@@ -425,7 +422,7 @@ function App() {
                         <td className="py-3 px-3">{formatNum(rep.genTarget)}</td>
                         <td className="py-3 px-3 font-bold text-white">{formatNum(rep.genSales)}</td>
                         <td className="py-3 px-3">
-                          <span className={`font-bold ${rep.meetsGeneralRule ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <span className={`font-bold ${rep.passGate1_GeneralTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {rep.genPct.toFixed(1)}%
                           </span>
                         </td>
@@ -439,7 +436,7 @@ function App() {
                         <td className="py-3 px-3 text-amber-300 font-bold">{formatNum(rep.generalTargetCommEarned)}</td>
                         <td className="py-3 px-3 text-center">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            rep.meetsMinGroupsRule ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-950 text-rose-300'
+                            rep.passGate2_MinGroups ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-950 text-rose-300'
                           }`}>
                             {rep.qualifiedGroupsCount} / 14
                           </span>
@@ -485,7 +482,7 @@ function App() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                   <label className="text-xs font-bold text-slate-300 block mb-1">نسبة شرط الهدف العام (%)</label>
                   <input
@@ -514,6 +511,16 @@ function App() {
                     value={generalRules.minGroupsRequired || 7}
                     onChange={(e) => setGeneralRules({ ...generalRules, minGroupsRequired: parseInt(e.target.value) || 0 })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-teal-300 text-center disabled:opacity-60"
+                  />
+                </div>
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                  <label className="text-xs font-bold text-slate-300 block mb-1">شرط تحصيل ديون &gt; 60 يوم (%)</label>
+                  <input
+                    type="number"
+                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                    value={generalRules.minOver60RequiredPct || 40}
+                    onChange={(e) => setGeneralRules({ ...generalRules, minOver60RequiredPct: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-blue-400 text-center disabled:opacity-60"
                   />
                 </div>
               </div>
@@ -616,7 +623,7 @@ function App() {
                   <i className="fa-solid fa-kitchen-set text-purple-400"></i> مطبخ تخطيط ومحاكاة الأهداف (Sandbox)
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  عدّل الشروط وجرّب النتائج دون التأثير على الأرقام الرسمية؛ وعند الانتهاء اضغط "رفع المقترح".
+                  عدّل الشروط وجرّب النتائج دون التأثير على الأرقام الرسمية؛ وعند الانتهاء اضغط "رفع مقترح المطبخ".
                 </p>
               </div>
 
@@ -638,7 +645,7 @@ function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                 <label className="text-xs font-bold text-purple-300 block mb-1">تجربة شرط الهدف العام (%)</label>
                 <input
@@ -664,6 +671,15 @@ function App() {
                   value={kitchenGeneralRules.minGroupsRequired || 7}
                   onChange={(e) => setKitchenGeneralRules({ ...kitchenGeneralRules, minGroupsRequired: parseInt(e.target.value) || 0 })}
                   className="w-full bg-slate-950 border border-purple-500/40 rounded-lg p-2 font-bold text-teal-300 text-center"
+                />
+              </div>
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                <label className="text-xs font-bold text-purple-300 block mb-1">تجربة شرط ديون &gt; 60 يوم (%)</label>
+                <input
+                  type="number"
+                  value={kitchenGeneralRules.minOver60RequiredPct || 40}
+                  onChange={(e) => setKitchenGeneralRules({ ...kitchenGeneralRules, minOver60RequiredPct: parseFloat(e.target.value) || 0 })}
+                  className="w-full bg-slate-950 border border-purple-500/40 rounded-lg p-2 font-bold text-blue-300 text-center"
                 />
               </div>
             </div>
@@ -812,7 +828,7 @@ function App() {
                       <td className="p-2.5 text-center font-sans">
                         {grp.isQualified ? <span className="text-emerald-400 font-bold">محققة</span> : <span className="text-slate-500">غير محققة</span>}
                       </td>
-                      <td className="p-2.5 text-teal-300 font-bold">{formatNum(selectedRep.isFullyEligibleForGroupComm ? grp.potentialComm : 0)} ر.س</td>
+                      <td className="p-2.5 text-teal-300 font-bold">{formatNum(selectedRep.isEligibleForSalesCommissions ? grp.potentialComm : 0)} ر.س</td>
                     </tr>
                   ))}
                 </tbody>
