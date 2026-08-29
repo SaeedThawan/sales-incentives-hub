@@ -4,127 +4,346 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>نظام إدارة الأهداف والعمولات الشامل</title>
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM CDN -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts Cairo -->
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/custom.css">
+  <style>
+    body { font-family: 'Cairo', sans-serif; background-color: #0f172a; color: #f8fafc; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+  </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen">
   <div id="root"></div>
 
-  <script src="js/config.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/calculations.js"></script>
-
   <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useMemo, useEffect } = React;
+
+    const API_URL = "https://script.google.com/macros/s/AKfycbxE0uaJ6WoKzb6QPZE8yqkeJKb0x1DWog8-3nkYILdJHMknarUkd0JM3X0pNnZm9ZVzLQ/exec";
+
+    // أسماء وقواعد المجموعات الـ 14
+    const INITIAL_GROUPS_RULES = [
+      { id: 0, name: "شوكلاتة ايجلو", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 1, name: "بيكاديلي /ديجستف", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 2, name: "البقوليات + قشطة", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 3, name: "الطاقة", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 4, name: "زيت زيتون + طحينة", thresholdPct: 70, commType: 'fixed', commValue: 300 },
+      { id: 5, name: "جيلي جلب + كوزو", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 6, name: "رز فايف ستار", thresholdPct: 70, commType: 'fixed', commValue: 150 },
+      { id: 7, name: "بيسكوزا + سما فود", thresholdPct: 70, commType: 'fixed', commValue: 400 },
+      { id: 8, name: "اكسيلو", thresholdPct: 70, commType: 'fixed', commValue: 300 },
+      { id: 9, name: "عماني/دريم واي", thresholdPct: 70, commType: 'fixed', commValue: 200 },
+      { id: 10, name: "عسل", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 11, name: "تشوبا تشوبس", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 12, name: "كنجسي", thresholdPct: 70, commType: 'fixed', commValue: 250 },
+      { id: 13, name: "سن لوب", thresholdPct: 70, commType: 'fixed', commValue: 250 }
+    ];
+
+    // بيانات المندوبين الـ 17 الأصلية الكاملة
+    const INITIAL_REPS_DATA = [
+      {
+        id: 14, name: "سليمان سيف", generalTarget: 800000, generalSales: 656735, debt: 1125736, collection: 308090,
+        groups: [
+          { target: 100000, sales: 132786 }, { target: 30000, sales: 9026 }, { target: 325000, sales: 267524 },
+          { target: 150000, sales: 169575 }, { target: 70000, sales: 61920 }, { target: 8000, sales: 231 },
+          { target: 5000, sales: 0 }, { target: 20000, sales: -1520 }, { target: 20000, sales: 14917 },
+          { target: 5000, sales: 3136 }, { target: 7000, sales: 0 }, { target: 5000, sales: 2913 },
+          { target: 10000, sales: 2248 }, { target: 3000, sales: 0 }
+        ]
+      },
+      {
+        id: 15, name: "صلاح عبيد", generalTarget: 400000, generalSales: 322385, debt: 1460406, collection: 273597,
+        groups: [
+          { target: 80000, sales: 122521 }, { target: 50000, sales: 22886 }, { target: 50000, sales: 34066 },
+          { target: 50000, sales: 69193 }, { target: 40000, sales: 26910 }, { target: 8000, sales: 924 },
+          { target: 10000, sales: 6136 }, { target: 20000, sales: 3317 }, { target: 20000, sales: 1863 },
+          { target: 10000, sales: 12446 }, { target: 5000, sales: 3114 }, { target: 12000, sales: 0 },
+          { target: 15000, sales: 6414 }, { target: 4000, sales: 5588 }
+        ]
+      },
+      {
+        id: 16, name: "احمد عماد", generalTarget: 300000, generalSales: 231680, debt: 647172, collection: 205782,
+        groups: [
+          { target: 80000, sales: 106494 }, { target: 20000, sales: 15358 }, { target: 30000, sales: 14669 },
+          { target: 30000, sales: 16235 }, { target: 25000, sales: 32683 }, { target: 8000, sales: 3910 },
+          { target: 5000, sales: -3775 }, { target: 20000, sales: 7932 }, { target: 15000, sales: 6900 },
+          { target: 5000, sales: 2646 }, { target: 5000, sales: 954 }, { target: 12000, sales: -1417 },
+          { target: 40000, sales: 25444 }, { target: 4000, sales: 5820 }
+        ]
+      },
+      {
+        id: 18, name: "عمر حزام", generalTarget: 500000, generalSales: 432060, debt: 1352001, collection: 358524,
+        groups: [
+          { target: 80000, sales: 115796 }, { target: 50000, sales: 24332 }, { target: 50000, sales: 45235 },
+          { target: 150000, sales: 115993 }, { target: 25000, sales: 4630 }, { target: 8000, sales: 364 },
+          { target: 15000, sales: -3180 }, { target: 25000, sales: 18342 }, { target: 20000, sales: 3900 },
+          { target: 10000, sales: 4410 }, { target: 5000, sales: 813 }, { target: 12000, sales: -7268 },
+          { target: 50000, sales: 83172 }, { target: 4000, sales: 4277 }
+        ]
+      },
+      {
+        id: 19, name: "منير العريج", generalTarget: 400000, generalSales: 402118, debt: 836242, collection: 303544,
+        groups: [
+          { target: 185000, sales: 193408 }, { target: 15000, sales: 12781 }, { target: 0, sales: 0 },
+          { target: 10000, sales: 8585 }, { target: 15000, sales: 18000 }, { target: 8000, sales: 3548 },
+          { target: 0, sales: 0 }, { target: 25000, sales: 19288 }, { target: 30000, sales: 31000 },
+          { target: 10000, sales: 12740 }, { target: 0, sales: 0 }, { target: 20000, sales: 18000 },
+          { target: 85000, sales: 84768 }, { target: 4000, sales: 0 }
+        ]
+      },
+      {
+        id: 20, name: "محمد الحضرمي", generalTarget: 350000, generalSales: 270663, debt: 962073, collection: 154694,
+        groups: [
+          { target: 150000, sales: 144496 }, { target: 75000, sales: 59912 }, { target: 10000, sales: 5630 },
+          { target: 10000, sales: 13090 }, { target: 12000, sales: 3215 }, { target: 8000, sales: 1690 },
+          { target: 5000, sales: 3840 }, { target: 10000, sales: 3524 }, { target: 10000, sales: 4150 },
+          { target: 25000, sales: 27456 }, { target: 5000, sales: 675 }, { target: 5000, sales: -69 },
+          { target: 15000, sales: 15440 }, { target: 4000, sales: -25 }
+        ]
+      },
+      {
+        id: 21, name: "خالد قعطبي", generalTarget: 500000, generalSales: 513043, debt: 1467825, collection: 283638,
+        groups: [
+          { target: 130000, sales: 182108 }, { target: 75000, sales: 67552 }, { target: 25000, sales: 35725 },
+          { target: 75000, sales: 60095 }, { target: 45000, sales: 42728 }, { target: 8000, sales: 2988 },
+          { target: 5000, sales: 5572 }, { target: 10000, sales: 556 }, { target: 20000, sales: 13800 },
+          { target: 15000, sales: 16758 }, { target: 5000, sales: 3746 }, { target: 5000, sales: 6262 },
+          { target: 40000, sales: 42168 }, { target: 4000, sales: 0 }
+        ]
+      },
+      {
+        id: 35, name: "حازم ماطري", generalTarget: 500000, generalSales: 490104, debt: 847806, collection: 269023,
+        groups: [
+          { target: 100000, sales: 184418 }, { target: 75000, sales: 74082 }, { target: 25000, sales: 15918 },
+          { target: 80000, sales: 69105 }, { target: 20000, sales: 8540 }, { target: 8000, sales: 1855 },
+          { target: 10000, sales: 6790 }, { target: 15000, sales: 25215 }, { target: 20000, sales: 12196 },
+          { target: 15000, sales: 24478 }, { target: 5000, sales: 2350 }, { target: 15000, sales: 29400 },
+          { target: 15000, sales: 22723 }, { target: 4000, sales: 6340 }
+        ]
+      },
+      {
+        id: 23, name: "زايد الهميس", generalTarget: 775000, generalSales: 684527, debt: 829304, collection: 231148,
+        groups: [
+          { target: 200000, sales: 185590 }, { target: 60000, sales: 66825 }, { target: 65000, sales: 50956 },
+          { target: 275000, sales: 223402 }, { target: 30000, sales: 24170 }, { target: 8000, sales: 7800 },
+          { target: 10000, sales: -10588 }, { target: 20000, sales: -1627 }, { target: 20000, sales: 15200 },
+          { target: 30000, sales: 46870 }, { target: 5000, sales: 4840 }, { target: 40000, sales: 53875 },
+          { target: 15000, sales: 7004 }, { target: 3000, sales: 2400 }
+        ]
+      },
+      {
+        id: 36, name: "معتصم المخلافي", generalTarget: 425000, generalSales: 409934, debt: 220102, collection: 87597,
+        groups: [
+          { target: 150000, sales: 191825 }, { target: 10000, sales: 4133 }, { target: 40000, sales: 15079 },
+          { target: 90000, sales: 118105 }, { target: 20000, sales: 0 }, { target: 8000, sales: 1992 },
+          { target: 10000, sales: 5600 }, { target: 20000, sales: 17433 }, { target: 20000, sales: 5200 },
+          { target: 30000, sales: 28168 }, { target: 5000, sales: 0 }, { target: 10000, sales: 17250 },
+          { target: 15000, sales: 2640 }, { target: 3000, sales: 2712 }
+        ]
+      },
+      {
+        id: 38, name: "محمد غالب الشرعبي", generalTarget: 290000, generalSales: 213735, debt: 709959, collection: 237255,
+        groups: [
+          { target: 75000, sales: 80480 }, { target: 50000, sales: 35133 }, { target: 35000, sales: 33621 },
+          { target: 5000, sales: 4250 }, { target: 20000, sales: 8654 }, { target: 8000, sales: 1500 },
+          { target: 30000, sales: 27387 }, { target: 10000, sales: 8133 }, { target: 20000, sales: 6696 },
+          { target: 10000, sales: 3428 }, { target: 5000, sales: 1585 }, { target: 5000, sales: 6700 },
+          { target: 10000, sales: 1403 }, { target: 4000, sales: 480 }
+        ]
+      },
+      {
+        id: 9, name: "اشرف الصبري", generalTarget: 325000, generalSales: 221828, debt: 681931, collection: 211251,
+        groups: [
+          { target: 75000, sales: 77788 }, { target: 50000, sales: 50125 }, { target: 30000, sales: 15068 },
+          { target: 5000, sales: 0 }, { target: 20000, sales: 4120 }, { target: 8000, sales: 3597 },
+          { target: 30000, sales: 30513 }, { target: 15000, sales: 21133 }, { target: 20000, sales: 1898 },
+          { target: 10000, sales: 12148 }, { target: 5000, sales: 362 }, { target: 5000, sales: 1360 },
+          { target: 10000, sales: 0 }, { target: 4000, sales: 2130 }
+        ]
+      },
+      {
+        id: 1, name: "مبيعات عام", generalTarget: 175000, generalSales: 289775, debt: 4412717, collection: 98500,
+        groups: [
+          { target: 50000, sales: 70171 }, { target: 25000, sales: 38690 }, { target: 30000, sales: 133984 },
+          { target: 18000, sales: 13730 }, { target: 0, sales: 244 }, { target: 0, sales: 5343 },
+          { target: 0, sales: 207 }, { target: 10000, sales: 6630 }, { target: 20000, sales: 2362 },
+          { target: 0, sales: 11090 }, { target: 0, sales: 2250 }, { target: 25000, sales: 834 },
+          { target: 0, sales: 362 }, { target: 0, sales: 3 }
+        ]
+      },
+      {
+        id: 100, name: "مندوب عميل ياسر هزازي", generalTarget: 75000, generalSales: 61540, debt: 0, collection: 0,
+        groups: [
+          { target: 50000, sales: 7620 }, { target: 0, sales: 0 }, { target: 25000, sales: 9888 },
+          { target: 50000, sales: 34432 }, { target: 0, sales: 0 }, { target: 0, sales: 0 },
+          { target: 0, sales: 9600 }, { target: 0, sales: 0 }, { target: 0, sales: 0 },
+          { target: 0, sales: 0 }, { target: 0, sales: 0 }, { target: 0, sales: 0 },
+          { target: 0, sales: 0 }, { target: 0, sales: 0 }
+        ]
+      },
+      {
+        id: 10002, name: "علي محمد كابن", generalTarget: 50000, generalSales: 24346, debt: 31826, collection: 10614,
+        groups: [
+          { target: 15000, sales: 12312 }, { target: 5000, sales: 555 }, { target: 2500, sales: 138 },
+          { target: 2000, sales: 672 }, { target: 3000, sales: 418 }, { target: 2000, sales: 129 },
+          { target: 2000, sales: 6209 }, { target: 2000, sales: 183 }, { target: 2000, sales: 1346 },
+          { target: 1000, sales: 200 }, { target: 1000, sales: 209 }, { target: 1500, sales: 307 },
+          { target: 2000, sales: 262 }, { target: 2000, sales: 940 }
+        ]
+      },
+      {
+        id: 10011, name: "سيد عابد", generalTarget: 50000, generalSales: 27992, debt: 27738, collection: 10018,
+        groups: [
+          { target: 15000, sales: 14206 }, { target: 5000, sales: 1177 }, { target: 2500, sales: 1736 },
+          { target: 2000, sales: 1824 }, { target: 3000, sales: 917 }, { target: 2000, sales: 457 },
+          { target: 2000, sales: 1226 }, { target: 2000, sales: 746 }, { target: 2000, sales: 2749 },
+          { target: 1000, sales: 1042 }, { target: 1000, sales: 208 }, { target: 1500, sales: 85 },
+          { target: 2000, sales: 1306 }, { target: 2000, sales: 188 }
+        ]
+      },
+      {
+        id: 10052, name: "احمد مصطفى", generalTarget: 80000, generalSales: 76297, debt: 113481, collection: 28012,
+        groups: [
+          { target: 25000, sales: 25712 }, { target: 5000, sales: 4842 }, { target: 5000, sales: 2751 },
+          { target: 3000, sales: 1912 }, { target: 2000, sales: 2645 }, { target: 2000, sales: 473 },
+          { target: 36000, sales: 30031 }, { target: 2000, sales: 1060 }, { target: 2000, sales: 2652 },
+          { target: 3000, sales: 1242 }, { target: 1000, sales: 1142 }, { target: 1000, sales: 326 },
+          { target: 2000, sales: 745 }, { target: 2000, sales: 700 }
+        ]
+      }
+    ];
+
+    const INITIAL_GENERAL_RULES = {
+      generalThresholdPct: 80,
+      generalTargetCommValue: 500,
+      minGroupsRequired: 7,
+      collectionTiers: [
+        { minPct: 0, maxPct: 19.99, rate: 0.0000 },
+        { minPct: 20, maxPct: 29.99, rate: 0.0025 },
+        { minPct: 30, maxPct: 39.99, rate: 0.0050 },
+        { minPct: 40, maxPct: 59.99, rate: 0.0075 },
+        { minPct: 60, maxPct: 1000, rate: 0.0100 }
+      ]
+    };
 
     function App() {
-      const [currentUser, setCurrentUser] = useState(null);
-      const [usernameInput, setUsernameInput] = useState('');
-      const [passwordInput, setPasswordInput] = useState('');
-      const [loginLoading, setLoginLoading] = useState(false);
-
-      const [monthKey, setMonthKey] = useState('2026-08');
-      const [monthStatus, setMonthStatus] = useState('open');
-      const [activeProposalInfo, setActiveProposalInfo] = useState(null);
+      const [currentUser, setCurrentUser] = useState({ userId: 1, username: 'admin', fullName: 'المدير العام', role: 'manager' });
+      const [repsData, setRepsData] = useState(INITIAL_REPS_DATA);
+      const [generalRules, setGeneralRules] = useState(INITIAL_GENERAL_RULES);
+      const [groupRules, setGroupRules] = useState(INITIAL_GROUPS_RULES);
       const [activeTab, setActiveTab] = useState('summary');
       const [searchTerm, setSearchTerm] = useState('');
       const [selectedRep, setSelectedRep] = useState(null);
+      const [monthStatus, setMonthStatus] = useState('open');
       const [showAuditModal, setShowAuditModal] = useState(false);
       const [notification, setNotification] = useState('');
       const [syncLoading, setSyncLoading] = useState(false);
-
-      const [groupRules, setGroupRules] = useState(CONFIG.FALLBACK_GROUPS || []);
-      const [repsData, setRepsData] = useState(CONFIG.FALLBACK_REPS || []);
-      const [generalRules, setGeneralRules] = useState(CONFIG.DEFAULT_GENERAL_RULES || {});
+      const [expandedGroupIdx, setExpandedGroupIdx] = useState(null);
 
       const showToast = (msg) => {
         setNotification(msg);
-        setTimeout(() => setNotification(''), 4000);
+        setTimeout(() => setNotification(''), 3500);
       };
 
       const formatNum = (num) => Math.round(num || 0).toLocaleString('en-US');
 
-      const handleLogin = async (e) => {
-        e.preventDefault();
-        setLoginLoading(true);
-        const res = await AuthService.login(usernameInput, passwordInput);
-        if (res && res.status === 'success') {
-          setCurrentUser(res.user);
-          showToast(`مرحباً: ${res.user.fullName}`);
-          loadData(res.user);
-        } else {
-          showToast(`خطأ: ${res ? res.message : 'فشل الدخول'}`);
-        }
-        setLoginLoading(false);
-      };
-
-      const loadData = async (user) => {
-        setSyncLoading(true);
-        try {
-          const data = await ApiService.fetchWorkspace(user.role, user.userId, monthKey);
-          if (data) {
-            if (data.generalRules) setGeneralRules(data.generalRules);
-            if (data.groupRules && Array.isArray(data.groupRules) && data.groupRules.length) setGroupRules(data.groupRules);
-            if (data.reps && Array.isArray(data.reps) && data.reps.length) setRepsData(data.reps);
-            if (data.monthStatus) setMonthStatus(data.monthStatus);
-            if (data.activeProposal) setActiveProposalInfo(data.activeProposal);
-            showToast('تمت المزامنة بنجاح مع Google Sheets');
-          }
-        } catch (err) {
-          console.warn('Network issue, using fallback data');
-        }
-        setSyncLoading(false);
-      };
-
-      const handleSaveProposal = async () => {
-        setSyncLoading(true);
-        try {
-          const res = await ApiService.saveProposal(monthKey, { groupRules, repsData, generalRules }, currentUser);
-          showToast(res.message || 'تم حفظ المقترح ورفعه للإدارة');
-          setMonthStatus('pending_approval');
-          loadData(currentUser);
-        } catch (err) {
-          showToast('تم حفظ المقترح محلياً');
-          setMonthStatus('pending_approval');
-        }
-        setSyncLoading(false);
-      };
-
-      const handleApproveMonth = async () => {
-        if (currentUser.role !== 'manager') {
-          showToast('عذراً، صلاحية الاعتماد محصورة بالمدير العام فقط');
-          return;
-        }
-        setSyncLoading(true);
-        try {
-          const res = await ApiService.approveMonth(monthKey, currentUser);
-          showToast(res.message || 'تم اعتماد الشهر وقفل الحسابات بنجاح');
-          setMonthStatus('approved');
-          loadData(currentUser);
-        } catch (err) {
-          showToast('تم اعتماد الشهر محلياً');
-          setMonthStatus('approved');
-        }
-        setSyncLoading(false);
-      };
-
-      const handleUnlockMonth = () => {
-        if (currentUser.role !== 'manager') return;
-        setMonthStatus('open');
-        showToast('تم فتح الشهر للتعديل مجدداً من قبل المدير العام');
+      const getCollectionCommissionRate = (collPct) => {
+        const tier = generalRules.collectionTiers.find(t => collPct >= t.minPct && collPct <= t.maxPct);
+        return tier ? tier.rate : 0;
       };
 
       const processedReps = useMemo(() => {
-        if (!Array.isArray(repsData)) return [];
-        return repsData
-          .map(rep => CalcEngine.processRepData(rep, generalRules, groupRules))
-          .filter(Boolean);
+        return repsData.map(rep => {
+          const genTarget = rep.generalTarget || 0;
+          const genSales = rep.generalSales || 0;
+          const genPct = genTarget > 0 ? (genSales / genTarget) * 100 : 0;
+          const requiredGenSales = genTarget * (generalRules.generalThresholdPct / 100);
+          const remainingGenSales = Math.max(0, requiredGenSales - genSales);
+          const meetsGeneralRule = genPct >= generalRules.generalThresholdPct;
+
+          let qualifiedGroupsCount = 0;
+          let potentialGroupCommSum = 0;
+
+          const detailedGroups = (rep.groups || []).map((grp, gIdx) => {
+            const rule = groupRules[gIdx] || { thresholdPct: 70, commType: 'fixed', commValue: 250, name: `مجموعة ${gIdx+1}` };
+            const grpTarget = grp.target || 0;
+            const grpSales = grp.sales || 0;
+            const grpPct = grpTarget > 0 ? (grpSales / grpTarget) * 100 : 0;
+            const isQualified = grpTarget > 0 && grpPct >= rule.thresholdPct;
+
+            if (isQualified) qualifiedGroupsCount++;
+
+            const effectiveCommVal = grp.customComm !== undefined ? grp.customComm : rule.commValue;
+            let potentialComm = 0;
+            if (isQualified) {
+              potentialComm = rule.commType === 'fixed' ? effectiveCommVal : Math.max(0, grpSales) * (effectiveCommVal / 100);
+            }
+            potentialGroupCommSum += potentialComm;
+
+            return {
+              ...grp,
+              name: rule.name,
+              thresholdPct: rule.thresholdPct,
+              effectiveCommVal,
+              grpPct,
+              isQualified,
+              potentialComm
+            };
+          });
+
+          const meetsMinGroupsRule = qualifiedGroupsCount >= generalRules.minGroupsRequired;
+          const isFullyEligibleForGroupComm = meetsGeneralRule && meetsMinGroupsRule;
+          const totalGroupCommissionEarned = isFullyEligibleForGroupComm ? potentialGroupCommSum : 0;
+
+          const baseGenCommVal = Number(generalRules.generalTargetCommValue) || 0;
+          const generalTargetCommEarned = (isFullyEligibleForGroupComm && baseGenCommVal > 0) ? baseGenCommVal : 0;
+
+          const debt = rep.debt || 0;
+          const coll = rep.collection || 0;
+          const collPct = debt > 0 ? (coll / debt) * 100 : 0;
+          const collCommRate = getCollectionCommissionRate(collPct);
+          const collectionCommission = coll * collCommRate;
+
+          const grandTotalCommission = collectionCommission + totalGroupCommissionEarned + generalTargetCommEarned;
+
+          let groupCommStatusMsg = '';
+          if (!meetsGeneralRule) {
+            groupCommStatusMsg = `محجوبة (لم يحقق الهدف العام ${generalRules.generalThresholdPct}%)`;
+          } else if (!meetsMinGroupsRule) {
+            groupCommStatusMsg = `محجوبة (حقق ${qualifiedGroupsCount} من أصل ${generalRules.minGroupsRequired} مجموعات)`;
+          } else {
+            groupCommStatusMsg = `مستحقة (${qualifiedGroupsCount} مجموعات محققة)`;
+          }
+
+          return {
+            ...rep,
+            genPct,
+            requiredGenSales,
+            remainingGenSales,
+            meetsGeneralRule,
+            meetsMinGroupsRule,
+            isFullyEligibleForGroupComm,
+            groupCommStatusMsg,
+            detailedGroups,
+            qualifiedGroupsCount,
+            collPct,
+            collCommRate,
+            collectionCommission,
+            totalGroupCommissionEarned,
+            generalTargetCommEarned,
+            grandTotalCommission
+          };
+        });
       }, [repsData, generalRules, groupRules]);
 
       const companyTotals = useMemo(() => {
@@ -151,223 +370,164 @@
         };
       }, [processedReps]);
 
-      const visibleReps = useMemo(() => {
-        if (!currentUser) return [];
-        if (currentUser.role === 'rep') {
-          return processedReps.filter(r => Number(r.id) === Number(currentUser.userId));
-        }
+      const filteredReps = useMemo(() => {
         return processedReps.filter(r => (r.name && r.name.includes(searchTerm)) || (r.id && r.id.toString().includes(searchTerm)));
-      }, [processedReps, currentUser, searchTerm]);
-
-      if (!currentUser) {
-        return (
-          <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950">
-            <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-              <div className="text-center space-y-2">
-                <div className="inline-flex p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400 text-3xl">
-                  <i className="fa-solid fa-shield-halved"></i>
-                </div>
-                <h1 className="text-2xl font-black text-white">نظام الأهداف والعمولات</h1>
-                <p className="text-xs text-slate-400">سجل الدخول بحسابك للوصول للوحة المخصصة</p>
-              </div>
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-300 block mb-1.5">المستخدم / الكود</label>
-                  <input
-                    type="text"
-                    required
-                    value={usernameInput}
-                    onChange={(e) => setUsernameInput(e.target.value)}
-                    placeholder="admin / supervisor / 14"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-300 block mb-1.5">كلمة المرور</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loginLoading}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
-                >
-                  {loginLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-right-to-bracket"></i>}
-                  <span>تسجيل الدخول</span>
-                </button>
-              </form>
-            </div>
-          </div>
-        );
-      }
+      }, [processedReps, searchTerm]);
 
       return (
         <div className="pb-16 dir-rtl">
-          <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md p-4">
-            <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-500 p-2.5 rounded-xl text-slate-950 text-xl font-bold">
-                  <i className="fa-solid fa-chart-pie"></i>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-lg font-black text-white">نظام الأهداف والعمولات</h1>
-                    <button
-                      onClick={() => setShowAuditModal(true)}
-                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 transition-all ${
-                        monthStatus === 'approved'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
-                          : monthStatus === 'pending_approval'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30'
-                      }`}
-                    >
-                      <i className="fa-solid fa-circle-info"></i>
-                      <span>{monthStatus === 'approved' ? 'معتمد ومقفل 🔒' : monthStatus === 'pending_approval' ? 'بانتظار الاعتماد ⏳' : 'قيد التخطيط ✍️'}</span>
-                    </button>
+          {/* Header */}
+          <header className="bg-slate-800 border-b border-slate-700 shadow-md">
+            <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                
+                <div className="flex items-center space-x-3 space-x-reverse">
+                  <div className="bg-gradient-to-tr from-emerald-500 to-teal-400 p-2.5 rounded-xl shadow-lg shadow-teal-500/20">
+                    <i className="fa-solid fa-calculator text-slate-900 text-xl"></i>
                   </div>
-                  <p className="text-xs text-slate-400">
-                    المستخدم: <b className="text-emerald-400">{currentUser.fullName}</b> ({currentUser.role === 'manager' ? 'المدير العام' : currentUser.role === 'supervisor' ? 'مشرف المبيعات' : 'مندوب مبيعات'})
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-xl font-black text-white">نظام إدارة الأهداف والعمولات الشامل</h1>
+                      <button
+                        onClick={() => setShowAuditModal(true)}
+                        className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                          monthStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        }`}
+                      >
+                        <i className="fa-solid fa-circle-info"></i>
+                        <span>{monthStatus === 'approved' ? 'معتمد ومقفل 🔒' : 'قيد التخطيط والمراجعة ✍️'}</span>
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      المستخدم: <b className="text-emerald-400">{currentUser.fullName}</b> ({currentUser.role === 'manager' ? 'المدير العام' : 'مشرف المبيعات'})
+                    </p>
+                  </div>
                 </div>
+
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  {currentUser.role === 'manager' && (
+                    monthStatus === 'approved' ? (
+                      <button
+                        onClick={() => { setMonthStatus('open'); showToast('تم فتح التعديل مجدداً من قبل المدير العام'); }}
+                        className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-md"
+                      >
+                        <i className="fa-solid fa-lock-open"></i>
+                        <span>فتح التعديل مجدداً</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setMonthStatus('approved'); showToast('تم اعتماد وترحيل الشهر وإقفاله بنجاح 🔒'); }}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"
+                      >
+                        <i className="fa-solid fa-stamp text-amber-300"></i>
+                        <span>اعتماد وترحيل النهائي 🔒</span>
+                      </button>
+                    )
+                  )}
+                </div>
+
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap text-xs">
-                <button
-                  onClick={() => loadData(currentUser)}
-                  disabled={syncLoading}
-                  className="bg-slate-900 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl flex items-center gap-1.5"
-                >
-                  <i className={`fa-solid fa-arrows-rotate text-emerald-400 ${syncLoading ? 'fa-spin' : ''}`}></i>
-                  <span>مزامنة</span>
-                </button>
-
-                {currentUser.role === 'supervisor' && monthStatus !== 'approved' && (
-                  <button
-                    onClick={handleSaveProposal}
-                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md shadow-purple-600/20"
-                  >
-                    <i className="fa-solid fa-paper-plane"></i>
-                    <span>رفع المقترح للإدارة</span>
-                  </button>
-                )}
-
-                {currentUser.role === 'manager' && (
-                  monthStatus === 'approved' ? (
-                    <button
-                      onClick={handleUnlockMonth}
-                      className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md"
-                    >
-                      <i className="fa-solid fa-lock-open"></i>
-                      <span>فتح التعديل مجدداً</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleApproveMonth}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-                    >
-                      <i className="fa-solid fa-stamp"></i>
-                      <span>اعتماد وترحيل النهائي 🔒</span>
-                    </button>
-                  )
-                )}
-
-                <button
-                  onClick={() => setCurrentUser(null)}
-                  className="bg-rose-950/60 text-rose-300 border border-rose-800/40 px-3 py-1.5 rounded-xl"
-                >
-                  خروج
-                </button>
-              </div>
-            </div>
-
-            {currentUser.role !== 'rep' && (
-              <div className="flex space-x-2 space-x-reverse mt-3 border-t border-slate-700/60 pt-2 overflow-x-auto">
+              {/* Navigation Tabs */}
+              <div className="flex space-x-2 space-x-reverse mt-4 border-t border-slate-700/60 pt-3 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('summary')}
-                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs ${
-                    activeTab === 'summary' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900 text-slate-300'
+                  className={`px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 shrink-0 ${
+                    activeTab === 'summary' ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  خلاصة المندوبين
+                  <i className="fa-solid fa-table-list"></i> خلاصة المندوبين والعمولات
                 </button>
+
                 <button
                   onClick={() => setActiveTab('config')}
-                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs ${
-                    activeTab === 'config' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 text-slate-300'
+                  className={`px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 shrink-0 ${
+                    activeTab === 'config' ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  إعدادات الشروط والتحصيل
+                  <i className="fa-solid fa-sliders"></i> إعدادات شروط وعمولات الـ 14 والتحصيل
                 </button>
+
                 <button
                   onClick={() => setActiveTab('proposals')}
-                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs ${
-                    activeTab === 'proposals' ? 'bg-purple-600 text-white' : 'bg-slate-900 text-purple-300'
+                  className={`px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 shrink-0 ${
+                    activeTab === 'proposals' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'bg-slate-900 text-purple-300 hover:bg-slate-700 border border-purple-500/30'
                   }`}
                 >
-                  مطبخ التخطيط
+                  <i className="fa-solid fa-kitchen-set text-amber-400"></i> المطبخ الرئيسي لتخطيط العمولات والأهداف 🧠
                 </button>
               </div>
-            )}
+
+            </div>
           </header>
 
+          {/* Toast Notification */}
           {notification && (
-            <div className="fixed bottom-5 left-5 z-50 bg-emerald-500 text-slate-950 px-4 py-3 rounded-2xl shadow-2xl font-bold animate-bounce">
-              {notification}
+            <div className="fixed bottom-5 left-5 z-50 bg-emerald-500 text-slate-950 px-4 py-3 rounded-xl shadow-2xl font-bold flex items-center gap-2 animate-bounce">
+              <i className="fa-solid fa-circle-check text-lg"></i>
+              <span>{notification}</span>
             </div>
           )}
 
-          <main className="max-w-7xl mx-auto px-4 mt-6">
-            {currentUser.role !== 'rep' && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
-                  <span className="text-slate-400 text-xs block mb-1">المبيعات العامة</span>
-                  <span className="text-base font-extrabold text-white font-mono">{formatNum(companyTotals.genSales)}</span>
-                </div>
-                <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
-                  <span className="text-slate-400 text-xs block mb-1">نسبة الإنجاز</span>
-                  <span className="text-base font-extrabold text-emerald-400 font-mono">{companyTotals.overallGenPct.toFixed(1)}%</span>
-                </div>
-                <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
-                  <span className="text-slate-400 text-xs block mb-1">عمولات المجموعات</span>
-                  <span className="text-base font-extrabold text-teal-300 font-mono">{formatNum(companyTotals.groupCommSum)} ر.س</span>
-                </div>
-                <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
-                  <span className="text-slate-400 text-xs block mb-1">عمولة الهدف</span>
-                  <span className="text-base font-extrabold text-amber-300 font-mono">{formatNum(companyTotals.genTargetCommSum)} ر.س</span>
-                </div>
-                <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
-                  <span className="text-slate-400 text-xs block mb-1">عمولة التحصيل</span>
-                  <span className="text-base font-extrabold text-blue-300 font-mono">{formatNum(companyTotals.collComm)} ر.س</span>
-                </div>
-                <div className="bg-slate-800 border border-emerald-500/40 bg-emerald-950/20 p-3.5 rounded-2xl">
-                  <span className="text-emerald-300 text-xs font-bold mb-1">إجمالي العمولات</span>
-                  <span className="text-lg font-black text-emerald-400 font-mono">{formatNum(companyTotals.grandComm)} ر.س</span>
-                </div>
-              </div>
-            )}
+          {/* Main Container */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
 
+            {/* بطاقات المؤشرات العامة */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+              <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block font-semibold mb-1">المبيعات العامة</span>
+                <span className="text-base font-extrabold text-white font-mono">{formatNum(companyTotals.genSales)}</span>
+                <span className="text-[11px] text-slate-400 block mt-0.5 font-mono">هدف {formatNum(companyTotals.genTarget)}</span>
+              </div>
+
+              <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block font-semibold mb-1">النسبة العامة</span>
+                <span className={`text-base font-extrabold font-mono ${companyTotals.overallGenPct >= generalRules.generalThresholdPct ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {companyTotals.overallGenPct.toFixed(1)}%
+                </span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">شرط الهدف: {generalRules.generalThresholdPct}%</span>
+              </div>
+
+              <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block font-semibold mb-1">إجمالي عمولات المجموعات</span>
+                <span className="text-base font-extrabold text-teal-300 font-mono">{formatNum(companyTotals.groupCommSum)} <span className="text-xs">ر.س</span></span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">للمستحقين</span>
+              </div>
+
+              <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block font-semibold mb-1">عمولات الهدف العام</span>
+                <span className="text-base font-extrabold text-amber-300 font-mono">{formatNum(companyTotals.genTargetCommSum)} <span className="text-xs">ر.س</span></span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">مكافأة الهدف</span>
+              </div>
+
+              <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block font-semibold mb-1">عمولات التحصيل الإجمالية</span>
+                <span className="text-base font-extrabold text-blue-300 font-mono">{formatNum(companyTotals.collComm)} <span className="text-xs">ر.س</span></span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">حسب الشرائح</span>
+              </div>
+
+              <div className="bg-slate-800 border border-emerald-500/30 bg-emerald-950/20 p-3.5 rounded-2xl shadow-sm">
+                <span className="text-emerald-300 text-xs block font-bold mb-1">إجمالي كافة العمولات</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{formatNum(companyTotals.grandComm)} <span className="text-[11px] font-normal text-slate-300">ر.س</span></span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">مجموعات + تحصيل + هدف</span>
+              </div>
+            </div>
+
+            {/* Tab 1: خلاصة المندوبين */}
             {activeTab === 'summary' && (
               <div className="space-y-4">
-                {currentUser.role !== 'rep' && (
-                  <div className="relative max-w-md">
+                <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
+                  <div className="relative flex-1 max-w-md">
                     <i className="fa-solid fa-magnifying-glass absolute right-3.5 top-3 text-slate-400 text-sm"></i>
                     <input
                       type="text"
-                      placeholder="ابحث باسم المندوب..."
+                      placeholder="ابحث باسم المندوب أو الرقم..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                   </div>
-                )}
+                </div>
 
                 <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
                   <div className="overflow-x-auto">
@@ -375,22 +535,23 @@
                       <thead className="bg-slate-900 text-slate-300 uppercase text-[11px] font-extrabold border-b border-slate-700">
                         <tr>
                           <th className="py-3.5 px-3">#</th>
-                          <th className="py-3.5 px-3">المندوب</th>
+                          <th className="py-3.5 px-3">اسم المندوب</th>
                           <th className="py-3.5 px-3">الهدف العام</th>
-                          <th className="py-3.5 px-3">المبيعات</th>
+                          <th className="py-3.5 px-3">المبيعات العامة</th>
                           <th className="py-3.5 px-3">النسبة</th>
                           <th className="py-3.5 px-3 text-amber-300">عمولة الهدف</th>
                           <th className="py-3.5 px-3 text-center">المجموعات</th>
+                          <th className="py-3.5 px-3 text-center">الحالة</th>
                           <th className="py-3.5 px-3">التحصيل</th>
                           <th className="py-3.5 px-3 text-blue-300">عمولة التحصيل</th>
-                          <th className="py-3.5 px-3 text-teal-300">عمولة المجموعات</th>
-                          <th className="py-3.5 px-3 text-emerald-300 font-black">إجمالي المستحق</th>
+                          <th className="py-3.5 px-3 text-teal-300">عمولات المجموعات</th>
+                          <th className="py-3.5 px-3 text-emerald-300 bg-emerald-950/30 font-black">إجمالي المستحق</th>
                           <th className="py-3.5 px-3 text-center">تفاصيل</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-700/60 font-mono">
-                        {visibleReps.map((rep) => (
-                          <tr key={rep.id} className="hover:bg-slate-700/40">
+                      <tbody className="divide-y divide-slate-700/60 font-medium font-mono">
+                        {filteredReps.map((rep) => (
+                          <tr key={rep.id} className="hover:bg-slate-700/40 transition-colors">
                             <td className="py-3 px-3 text-slate-400">{rep.id}</td>
                             <td className="py-3 px-3 font-sans font-bold text-white">{rep.name}</td>
                             <td className="py-3 px-3">{formatNum(rep.generalTarget)}</td>
@@ -408,16 +569,23 @@
                                 {rep.qualifiedGroupsCount} / 14
                               </span>
                             </td>
+                            <td className="py-3 px-3 text-center font-sans">
+                              {rep.isFullyEligibleForGroupComm ? (
+                                <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">مستحق</span>
+                              ) : (
+                                <span className="bg-rose-950/60 text-rose-300 px-2 py-0.5 rounded text-[10px]">محجوبة</span>
+                              )}
+                            </td>
                             <td className="py-3 px-3">{formatNum(rep.collection)}</td>
                             <td className="py-3 px-3 text-blue-300 font-bold">{formatNum(rep.collectionCommission)}</td>
                             <td className="py-3 px-3 text-teal-300 font-bold">{formatNum(rep.totalGroupCommissionEarned)}</td>
-                            <td className="py-3 px-3 font-black text-emerald-400 text-sm">
+                            <td className="py-3 px-3 bg-emerald-950/30 font-black text-emerald-400 text-sm">
                               {formatNum(rep.grandTotalCommission)} ر.س
                             </td>
                             <td className="py-3 px-3 text-center">
                               <button
                                 onClick={() => setSelectedRep(rep)}
-                                className="bg-slate-700 hover:bg-emerald-600 hover:text-slate-950 text-slate-200 px-3 py-1 rounded-lg text-xs font-bold"
+                                className="bg-slate-700 hover:bg-emerald-600 hover:text-slate-950 text-slate-200 px-3 py-1 rounded-lg text-xs font-bold transition-all"
                               >
                                 التفاصيل
                               </button>
@@ -431,35 +599,39 @@
               </div>
             )}
 
-            {activeTab === 'config' && currentUser.role !== 'rep' && (
+            {/* Tab 2: إعدادات الشروط */}
+            {activeTab === 'config' && (
               <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <i className="fa-solid fa-sliders text-amber-400"></i> إعدادات القواعد العامة وشروط التأهل
+                  <i className="fa-solid fa-sliders text-amber-400"></i> إعدادات شروط التأهل العامة
                 </h2>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                     <label className="text-xs font-bold text-slate-300 block mb-1">نسبة شرط الهدف العام (%)</label>
                     <input
                       type="number"
-                      value={generalRules.generalThresholdPct || 80}
+                      value={generalRules.generalThresholdPct}
                       onChange={(e) => setGeneralRules({ ...generalRules, generalThresholdPct: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-emerald-400 text-center"
                     />
                   </div>
+
                   <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                     <label className="text-xs font-bold text-slate-300 block mb-1">عمولة الهدف العام (ر.س)</label>
                     <input
                       type="number"
-                      value={generalRules.generalTargetCommValue || 500}
+                      value={generalRules.generalTargetCommValue}
                       onChange={(e) => setGeneralRules({ ...generalRules, generalTargetCommValue: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-amber-300 text-center font-mono"
                     />
                   </div>
+
                   <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                     <label className="text-xs font-bold text-slate-300 block mb-1">أدنى عدد مجموعات مطلوبة</label>
                     <input
                       type="number"
-                      value={generalRules.minGroupsRequired || 7}
+                      value={generalRules.minGroupsRequired}
                       onChange={(e) => setGeneralRules({ ...generalRules, minGroupsRequired: parseInt(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-teal-300 text-center"
                     />
@@ -468,11 +640,18 @@
               </div>
             )}
 
-            {activeTab === 'proposals' && currentUser.role !== 'rep' && (
+            {/* Tab 3: مطبخ التخطيط */}
+            {activeTab === 'proposals' && (
               <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <i className="fa-solid fa-kitchen-set text-purple-400"></i> مطبخ تخطيط أهداف المجموعات الـ 14
-                </h2>
+                <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+                  <div>
+                    <h2 className="text-base font-bold text-white flex items-center gap-2">
+                      <i className="fa-solid fa-kitchen-set text-purple-400"></i> مطبخ تخطيط وتعديل أهداف المجموعات الـ 14
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">تعديل الشروط والعمولات الخاصة لكل مجموعة</p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {groupRules.map((grp, idx) => (
                     <div key={idx} className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
@@ -480,6 +659,7 @@
                         <span className="font-bold text-sm text-white">{grp.name}</span>
                         <span className="text-[10px] text-teal-300 bg-teal-950/60 px-2 py-0.5 rounded">مجموعة {idx+1}</span>
                       </div>
+
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>
                           <label className="text-[10px] text-slate-400 block mb-1">شرط التأهل (%)</label>
@@ -513,6 +693,7 @@
                 </div>
               </div>
             )}
+
           </main>
 
           {/* نافذة تفاصيل المندوب */}
@@ -521,7 +702,7 @@
               <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4">
                 <div className="flex justify-between items-center border-b border-slate-700 pb-3">
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <i className="fa-solid fa-user-check text-emerald-400"></i> تفاصيل أداء: {selectedRep.name}
+                    <i className="fa-solid fa-user-check text-emerald-400"></i> تفاصيل أداء المندوب: {selectedRep.name}
                   </h3>
                   <button onClick={() => setSelectedRep(null)} className="text-slate-400 hover:text-white">
                     <i className="fa-solid fa-xmark text-lg"></i>
@@ -569,7 +750,7 @@
             </div>
           )}
 
-          {/* نافذة التراكر والرقابة (Audit Tracker Modal) */}
+          {/* نافذة التراكر */}
           {showAuditModal && (
             <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
               <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -592,20 +773,12 @@
 
                   <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-slate-400">مقدم المقترح:</span>
-                      <span className="font-bold text-white">{activeProposalInfo ? activeProposalInfo.submittedBy : 'المشرف'}</span>
+                      <span className="text-slate-400">آخر تعديل بواسطة:</span>
+                      <span className="font-bold text-white">{currentUser.fullName}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">وقت الرفع:</span>
-                      <span className="font-mono text-slate-300">{activeProposalInfo ? activeProposalInfo.submissionDate : '-'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">المدير المعتمد:</span>
-                      <span className="font-bold text-emerald-300">{activeProposalInfo && activeProposalInfo.approvedBy ? activeProposalInfo.approvedBy : 'بانتظار الاعتماد'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">تاريخ الاعتماد:</span>
-                      <span className="font-mono text-slate-300">{activeProposalInfo && activeProposalInfo.approvalDate ? activeProposalInfo.approvalDate : '-'}</span>
+                      <span className="text-slate-400">تاريخ التحديث:</span>
+                      <span className="font-mono text-slate-300">26-08-2026</span>
                     </div>
                   </div>
                 </div>
@@ -621,6 +794,7 @@
               </div>
             </div>
           )}
+
         </div>
       );
     }
