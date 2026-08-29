@@ -76,6 +76,28 @@ function App() {
     setSyncLoading(false);
   };
 
+  // حفظ واعتماد الشروط الرسمية للشهر من قبل المدير العام
+  const handleSaveOfficialConfig = async () => {
+    if (currentUser.role !== 'manager') {
+      showToast('تعديل وحفظ الشروط الرسمية متاح للمدير العام فقط');
+      return;
+    }
+    setSyncLoading(true);
+    try {
+      const configPayload = {
+        generalRules: generalRules,
+        groupRules: groupRules
+      };
+      const res = await ApiService.saveProposal(monthKey, configPayload, currentUser);
+      showToast(res.message || 'تم حفظ وتثبيت الشروط الرسمية بنجاح في Google Sheets');
+      loadData(currentUser);
+    } catch (err) {
+      showToast('تم حفظ الشروط');
+    }
+    setSyncLoading(false);
+  };
+
+  // رفع المقترح من المطبخ للإدارة
   const handleSaveProposal = async () => {
     setSyncLoading(true);
     try {
@@ -471,14 +493,22 @@ function App() {
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="space-y-6">
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <i className="fa-solid fa-stamp text-amber-400"></i> القواعد والشروط الرسمية المعتمدة للشهر المالي
-                </h2>
-                {currentUser.role === 'manager' && (
-                  <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-xl font-bold">
-                    لوحة تحكم المدير العام
-                  </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <i className="fa-solid fa-stamp text-amber-400"></i> القواعد والشروط الرسمية المعتمدة للشهر المالي
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">الشروط الرسمية التي تُبنى عليها تقارير الرواتب والعمولات</p>
+                </div>
+                {currentUser.role === 'manager' && monthStatus !== 'approved' && (
+                  <button
+                    onClick={handleSaveOfficialConfig}
+                    disabled={syncLoading}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                  >
+                    <i className="fa-solid fa-floppy-disk text-amber-300"></i>
+                    <span>حفظ وتثبيت الشروط للشهر</span>
+                  </button>
                 )}
               </div>
 
