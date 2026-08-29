@@ -14,8 +14,7 @@ const ApiService = {
         action: 'saveProposal',
         monthKey,
         customRules,
-        userContext,
-        notes: 'مقترح أهداف وعمولات مرفوع من المشرف'
+        userContext
       })
     });
     return await res.json();
@@ -26,10 +25,32 @@ const ApiService = {
       method: 'POST',
       body: JSON.stringify({
         action: 'approveProposal',
-        proposalId: `PROP_${monthKey}`,
         monthKey,
-        userContext,
-        notes: 'تم الاعتماد النهائي والإقفال من المدير العام'
+        userContext
+      })
+    });
+    return await res.json();
+  },
+
+  async unlockMonth(monthKey, userContext) {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'unlockMonth',
+        monthKey,
+        userContext
+      })
+    });
+    return await res.json();
+  },
+
+  async recalculateRawData(monthKey, userContext) {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'recalculateRawData',
+        monthKey,
+        userContext
       })
     });
     return await res.json();
