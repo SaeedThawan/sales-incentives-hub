@@ -1,7 +1,6 @@
 const { useState, useEffect, useMemo } = React;
 
 function App() {
-  // استرجاع الجلسة المحفوظة تلقائياً لمنع الخروج عند التحديث
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('hub_user_session');
@@ -24,7 +23,6 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [analyticsSortBy, setAnalyticsSortBy] = useState('highestPct');
 
-  // القواعد الرسمية
   const [generalRules, setGeneralRules] = useState({
     generalThresholdPct: 80,
     generalTargetCommValue: 500,
@@ -39,7 +37,6 @@ function App() {
     CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true }))
   );
 
-  // قواعد المطبخ (مسترجعة من الذاكرة المحلية للحفاظ على جلسة المشرف)
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(() => {
     try {
       const saved = localStorage.getItem('kitchen_general_rules');
@@ -65,7 +62,6 @@ function App() {
   const [isKitchenApplied, setIsKitchenApplied] = useState(false);
   const [repsData, setRepsData] = useState([]);
 
-  // حفظ بيانات المطبخ تلقائياً عند أي تعديل
   useEffect(() => {
     if (kitchenGeneralRules) localStorage.setItem('kitchen_general_rules', JSON.stringify(kitchenGeneralRules));
   }, [kitchenGeneralRules]);
@@ -125,9 +121,14 @@ function App() {
           setGroupRules(formattedGroups);
           if (!localStorage.getItem('kitchen_group_rules')) setKitchenGroupRules(formattedGroups);
         }
+        
+        // استلام البيانات للمدير أو المندوب بشكل مرن
         if (data.reps && data.reps.length > 0) {
           setRepsData(data.reps);
+        } else if (data.rep) {
+          setRepsData([data.rep]);
         }
+
         if (data.monthStatus) setMonthStatus(data.monthStatus);
         if (data.activeProposal) setActiveProposalInfo(data.activeProposal);
         showToast('تمت المزامنة بنجاح مع Google Sheets');
@@ -177,7 +178,6 @@ function App() {
     setSyncLoading(false);
   };
 
-  // اعتماد وتطبيق مقترح المطبخ من قبل المدير العام
   const handleAdoptProposal = () => {
     if (activeProposalInfo && activeProposalInfo.customRules) {
       const rules = typeof activeProposalInfo.customRules === 'string' 
@@ -238,17 +238,21 @@ function App() {
     return CalcEngine.analyzeAndSortGroups(activeGroupRules, processedReps, analyticsSortBy);
   }, [activeGroupRules, processedReps, analyticsSortBy]);
 
-  // حل مشكلة تصفح بيانات المندوب (المطابقة بالاسم أو الرقم بمرونة)
   const visibleReps = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'rep') {
-      return processedReps.filter(r => 
+      const matched = processedReps.filter(r => 
         Number(r.id) === Number(currentUser.userId) || 
         (r.name && currentUser.fullName && (r.name.includes(currentUser.fullName) || currentUser.fullName.includes(r.name)))
       );
+      return matched.length > 0 ? matched : processedReps;
     }
     return processedReps.filter(r => (r.name && r.name.includes(searchTerm)) || (r.id && r.id.toString().includes(searchTerm)));
   }, [processedReps, currentUser, searchTerm]);
+
+  const currentRep = useMemo(() => {
+    return (currentUser && currentUser.role === 'rep' && visibleReps.length > 0) ? visibleReps[0] : null;
+  }, [currentUser, visibleReps]);
 
   const updateOfficialGroup = (idx, field, val) => {
     const updated = [...groupRules];
@@ -468,6 +472,117 @@ function App() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 mt-6">
+        {/* ========================================================================= */}
+        {/* واجهة المندوب الخاصة والشاملة (تظهر فقط عند تسجيل دخول مندوب مبيعات) */}
+        {/* ========================================================================= */}
+        {currentUser.role === 'rep' && currentRep ? (
+          <div className="space-y-6">
+            {/* بطاقات أداء المندوب */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block mb-1">الهدف العام</span>
+                <span className="text-base font-extrabold text-white font-mono">{formatNum(currentRep.genTarget)}</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">ر.س</span>
+              </div>
+              <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block mb-1">المبيعات المحققة</span>
+                <span className="text-base font-extrabold text-white font-mono">{formatNum(currentRep.genSales)}</span>
+                <span className={`text-[10px] block mt-0.5 font-bold ${currentRep.passGate1_GeneralTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  الإنجاز: {currentRep.genPct.toFixed(1)}%
+                </span>
+              </div>
+              <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block mb-1">المجموعات المحققة</span>
+                <span className="text-base font-extrabold text-teal-300 font-mono">{currentRep.qualifiedGroupsCount} / 14</span>
+                <span className={`text-[10px] block mt-0.5 font-bold ${currentRep.passGate2_MinGroups ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {currentRep.passGate2_MinGroups ? 'تأهل المجموعات ✅' : 'غير متأهل ❌'}
+                </span>
+              </div>
+              <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block mb-1">عمولة المجموعات</span>
+                <span className="text-base font-extrabold text-teal-300 font-mono">{formatNum(currentRep.totalGroupCommissionEarned)} ر.س</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">من الأصناف المؤهلة</span>
+              </div>
+              <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block mb-1">عمولة التحصيل</span>
+                <span className="text-base font-extrabold text-blue-300 font-mono">{formatNum(currentRep.collectionCommission)} ر.س</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">تحصيل {formatNum(currentRep.collection)}</span>
+              </div>
+              <div className="bg-slate-800 border border-emerald-500/40 bg-emerald-950/20 p-4 rounded-2xl shadow-md">
+                <span className="text-emerald-300 text-xs font-bold mb-1">إجمالي المستحق لك</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{formatNum(currentRep.grandTotalCommission)} ر.س</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">مبيعات + تحصيل</span>
+              </div>
+            </div>
+
+            {/* جدول تفاصيل أداء المجموعات الـ 14 للمندوب */}
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-4 shadow-xl">
+              <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-boxes-stacked text-teal-400"></i> تفاصيل مبيعات وأهداف المجموعات الـ 14 الخاصة بك:
+                </h3>
+                <span className="text-xs text-slate-400 font-sans">
+                  حالة الهدف العام: <b className={currentRep.passGate1_GeneralTarget ? 'text-emerald-400' : 'text-rose-400'}>
+                    {currentRep.passGate1_GeneralTarget ? 'متحقق ✅' : `متبقي ${formatNum(currentRep.remainingGenSales)} ر.س`}
+                  </b>
+                </span>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-700 rounded-xl">
+                <table className="w-full text-xs text-right text-slate-200">
+                  <thead className="bg-slate-900 text-slate-400">
+                    <tr>
+                      <th className="p-3">#</th>
+                      <th className="p-3">اسم المجموعة</th>
+                      <th className="p-3">الهدف المطلوب</th>
+                      <th className="p-3">المبيعات المحققة</th>
+                      <th className="p-3">نسبة الإنجاز</th>
+                      <th className="p-3">المتبقي للشرط</th>
+                      <th className="p-3 text-center">حالة التأهل</th>
+                      <th className="p-3">العمولة المستحقة</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700 font-mono">
+                    {(currentRep.detailedGroups || []).map((grp, idx) => (
+                      <tr key={idx} className={grp.isQualified ? 'bg-emerald-950/20' : 'hover:bg-slate-700/30'}>
+                        <td className="p-3 text-slate-500 font-sans">{idx + 1}</td>
+                        <td className="p-3 font-sans font-bold text-white">{grp.name}</td>
+                        <td className="p-3">{formatNum(grp.target)}</td>
+                        <td className="p-3 font-bold text-emerald-400">{formatNum(grp.sales)}</td>
+                        <td className="p-3">
+                          <span className={`font-bold ${grp.isQualified ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            {grp.grpPct.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="p-3 font-sans">
+                          {grp.remainingToThreshold > 0 ? (
+                            <span className="text-rose-300">{formatNum(grp.remainingToThreshold)}</span>
+                          ) : (
+                            <span className="text-emerald-400 font-bold">مكتمل ✅</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center font-sans">
+                          {grp.isQualified ? (
+                            <span className="bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">مؤهل</span>
+                          ) : (
+                            <span className="bg-slate-900 text-slate-500 px-2 py-0.5 rounded text-[10px]">غير مؤهل</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-teal-300 font-bold">
+                          {formatNum(currentRep.isEligibleForSalesCommissions ? grp.potentialComm : 0)} ر.س
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* ========================================================================= */}
+        {/* واجهة المدير العام ومشرف المبيعات */}
+        {/* ========================================================================= */}
         {currentUser.role !== 'rep' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
@@ -503,21 +618,19 @@ function App() {
           </div>
         )}
 
-        {/* Tab 1: Summary Table */}
-        {activeTab === 'summary' && (
+        {/* Tab 1: Summary Table (للمدير والمشرف) */}
+        {activeTab === 'summary' && currentUser.role !== 'rep' && (
           <div className="space-y-4">
-            {currentUser.role !== 'rep' && (
-              <div className="relative max-w-md">
-                <i className="fa-solid fa-magnifying-glass absolute right-3.5 top-3 text-slate-400 text-sm"></i>
-                <input
-                  type="text"
-                  placeholder="ابحث باسم المندوب أو الرقم..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-            )}
+            <div className="relative max-w-md">
+              <i className="fa-solid fa-magnifying-glass absolute right-3.5 top-3 text-slate-400 text-sm"></i>
+              <input
+                type="text"
+                placeholder="ابحث باسم المندوب أو الرقم..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+              />
+            </div>
 
             <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
               <div className="overflow-x-auto">
@@ -592,7 +705,7 @@ function App() {
           </div>
         )}
 
-        {/* Tab 2: الإعدادات الرسمية المعتمدة */}
+        {/* Tab 2: الإعدادات الرسمية المعتمدة (للمدير والمشرف) */}
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="space-y-6">
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
