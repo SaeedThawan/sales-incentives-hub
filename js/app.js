@@ -1,7 +1,14 @@
 const { useState, useEffect, useMemo } = React;
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  // استرجاع الجلسة المحفوظة تلقائياً لمنع الخروج عند التحديث
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hub_user_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+  });
+
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -17,7 +24,7 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [analyticsSortBy, setAnalyticsSortBy] = useState('highestPct');
 
-  // إعدادات الشروط العامة والتحصيل المنفصل
+  // القواعد الرسمية
   const [generalRules, setGeneralRules] = useState({
     generalThresholdPct: 80,
     generalTargetCommValue: 500,
@@ -32,22 +39,40 @@ function App() {
     CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true }))
   );
 
-  // قواعد المطبخ التجريبي المستقل
-  const [kitchenGeneralRules, setKitchenGeneralRules] = useState({
-    generalThresholdPct: 80,
-    generalTargetCommValue: 500,
-    minGroupsRequired: 7,
-    collectionRules: {
-      under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 },
-      over60: { isActive: true, thresholdPct: 40, commType: 'percent', commValue: 1.0 }
-    }
+  // قواعد المطبخ (مسترجعة من الذاكرة المحلية للحفاظ على جلسة المشرف)
+  const [kitchenGeneralRules, setKitchenGeneralRules] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kitchen_general_rules');
+      return saved ? JSON.parse(saved) : {
+        generalThresholdPct: 80,
+        generalTargetCommValue: 500,
+        minGroupsRequired: 7,
+        collectionRules: {
+          under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 },
+          over60: { isActive: true, thresholdPct: 40, commType: 'percent', commValue: 1.0 }
+        }
+      };
+    } catch(e) { return null; }
   });
-  const [kitchenGroupRules, setKitchenGroupRules] = useState(
-    CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true }))
-  );
-  const [isKitchenApplied, setIsKitchenApplied] = useState(false);
 
+  const [kitchenGroupRules, setKitchenGroupRules] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kitchen_group_rules');
+      return saved ? JSON.parse(saved) : CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true }));
+    } catch(e) { return CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true })); }
+  });
+
+  const [isKitchenApplied, setIsKitchenApplied] = useState(false);
   const [repsData, setRepsData] = useState([]);
+
+  // حفظ بيانات المطبخ تلقائياً عند أي تعديل
+  useEffect(() => {
+    if (kitchenGeneralRules) localStorage.setItem('kitchen_general_rules', JSON.stringify(kitchenGeneralRules));
+  }, [kitchenGeneralRules]);
+
+  useEffect(() => {
+    if (kitchenGroupRules) localStorage.setItem('kitchen_group_rules', JSON.stringify(kitchenGroupRules));
+  }, [kitchenGroupRules]);
 
   const showToast = (msg) => {
     setNotification(msg);
@@ -62,12 +87,18 @@ function App() {
     const res = await AuthService.login(usernameInput, passwordInput);
     if (res && res.status === 'success') {
       setCurrentUser(res.user);
+      localStorage.setItem('hub_user_session', JSON.stringify(res.user));
       showToast(`مرحباً بك: ${res.user.fullName}`);
       loadData(res.user);
     } else {
       showToast(`خطأ: ${res ? res.message : 'بيانات الدخول غير صحيحة'}`);
     }
     setLoginLoading(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('hub_user_session');
+    setCurrentUser(null);
   };
 
   const loadData = async (user) => {
@@ -87,12 +118,12 @@ function App() {
             }
           };
           setGeneralRules(mergedRules);
-          setKitchenGeneralRules(mergedRules);
+          if (!localStorage.getItem('kitchen_general_rules')) setKitchenGeneralRules(mergedRules);
         }
         if (data.groupRules && data.groupRules.length > 0) {
           const formattedGroups = data.groupRules.map(g => ({ ...g, isActive: g.isActive !== false }));
           setGroupRules(formattedGroups);
-          setKitchenGroupRules(formattedGroups);
+          if (!localStorage.getItem('kitchen_group_rules')) setKitchenGroupRules(formattedGroups);
         }
         if (data.reps && data.reps.length > 0) {
           setRepsData(data.reps);
@@ -106,6 +137,10 @@ function App() {
     }
     setSyncLoading(false);
   };
+
+  useEffect(() => {
+    if (currentUser) loadData(currentUser);
+  }, []);
 
   const handleSaveOfficialConfig = async () => {
     if (currentUser.role !== 'manager') {
@@ -140,6 +175,18 @@ function App() {
       setMonthStatus('pending_approval');
     }
     setSyncLoading(false);
+  };
+
+  // اعتماد وتطبيق مقترح المطبخ من قبل المدير العام
+  const handleAdoptProposal = () => {
+    if (activeProposalInfo && activeProposalInfo.customRules) {
+      const rules = typeof activeProposalInfo.customRules === 'string' 
+        ? JSON.parse(activeProposalInfo.customRules) 
+        : activeProposalInfo.customRules;
+      if (rules.generalRules) setGeneralRules(rules.generalRules);
+      if (rules.groupRules) setGroupRules(rules.groupRules);
+      showToast('تم استيراد وتطبيق مقترح المشرف في القواعد الرسمية بنجاح');
+    }
   };
 
   const handleApproveMonth = async () => {
@@ -191,22 +238,24 @@ function App() {
     return CalcEngine.analyzeAndSortGroups(activeGroupRules, processedReps, analyticsSortBy);
   }, [activeGroupRules, processedReps, analyticsSortBy]);
 
+  // حل مشكلة تصفح بيانات المندوب (المطابقة بالاسم أو الرقم بمرونة)
   const visibleReps = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'rep') {
-      return processedReps.filter(r => Number(r.id) === Number(currentUser.userId));
+      return processedReps.filter(r => 
+        Number(r.id) === Number(currentUser.userId) || 
+        (r.name && currentUser.fullName && (r.name.includes(currentUser.fullName) || currentUser.fullName.includes(r.name)))
+      );
     }
     return processedReps.filter(r => (r.name && r.name.includes(searchTerm)) || (r.id && r.id.toString().includes(searchTerm)));
   }, [processedReps, currentUser, searchTerm]);
 
-  // دوال تعديل المجموعات الرسمية
   const updateOfficialGroup = (idx, field, val) => {
     const updated = [...groupRules];
     updated[idx] = { ...updated[idx], [field]: val };
     setGroupRules(updated);
   };
 
-  // دوال تعديل تحصيل الرسمية
   const updateOfficialColl = (section, field, val) => {
     setGeneralRules({
       ...generalRules,
@@ -220,7 +269,6 @@ function App() {
     });
   };
 
-  // دوال تعديل المطبخ
   const updateKitchenGroup = (idx, field, val) => {
     const updated = [...kitchenGroupRules];
     updated[idx] = { ...updated[idx], [field]: val };
@@ -260,7 +308,7 @@ function App() {
                 required
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
-                placeholder="admin / supervisor / 14"
+                placeholder="admin / supervisor / 19"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
@@ -375,8 +423,8 @@ function App() {
             )}
 
             <button
-              onClick={() => setCurrentUser(null)}
-              className="bg-rose-950/60 text-rose-300 border border-rose-800/40 px-3 py-1.5 rounded-xl"
+              onClick={handleLogout}
+              className="bg-rose-950/60 text-rose-300 border border-rose-800/40 px-3 py-1.5 rounded-xl hover:bg-rose-900"
             >
               خروج
             </button>
@@ -555,19 +603,32 @@ function App() {
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">الشروط الرسمية التي تُبنى عليها تقارير الرواتب والعمولات</p>
                 </div>
-                {currentUser.role === 'manager' && monthStatus !== 'approved' && (
-                  <button
-                    onClick={handleSaveOfficialConfig}
-                    disabled={syncLoading}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
-                  >
-                    <i className="fa-solid fa-floppy-disk text-amber-300"></i>
-                    <span>حفظ وتثبيت الشروط للشهر</span>
-                  </button>
-                )}
+                
+                <div className="flex items-center gap-2">
+                  {currentUser.role === 'manager' && activeProposalInfo && monthStatus !== 'approved' && (
+                    <button
+                      onClick={handleAdoptProposal}
+                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/20"
+                    >
+                      <i className="fa-solid fa-file-import text-amber-300"></i>
+                      <span>استيراد مقترح المشرف 📥</span>
+                    </button>
+                  )}
+
+                  {currentUser.role === 'manager' && monthStatus !== 'approved' && (
+                    <button
+                      onClick={handleSaveOfficialConfig}
+                      disabled={syncLoading}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                    >
+                      <i className="fa-solid fa-floppy-disk text-amber-300"></i>
+                      <span>حفظ وتثبيت الشروط للشهر</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* بطاقات الشروط العامة (بدون شرط الـ 60 يوم بالأعلى) */}
+              {/* بطاقات الشروط العامة */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                   <label className="text-xs font-bold text-slate-300 block mb-1">نسبة شرط الهدف العام (%)</label>
@@ -601,7 +662,7 @@ function App() {
                 </div>
               </div>
 
-              {/* جدول المجموعات الـ 14 مع Checkbox التفعيل */}
+              {/* جدول المجموعات الـ 14 مع Checkbox */}
               <div className="space-y-3 pt-4 border-t border-slate-700">
                 <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
                   <i className="fa-solid fa-boxes-stacked"></i> شروط وعمولات المجموعات الـ 14 المعتمدة:
@@ -668,7 +729,7 @@ function App() {
                 </div>
               </div>
 
-              {/* جدول شروط وعمولات التحصيل المنفصل بالأسفل */}
+              {/* جدول شروط وعمولات التحصيل المنفصل */}
               <div className="space-y-3 pt-4 border-t border-slate-700">
                 <h3 className="text-sm font-bold text-blue-400 flex items-center gap-2">
                   <i className="fa-solid fa-hand-holding-dollar"></i> شروط وعمولات التحصيل (بعد استبعاد الديون المتعثرة):
@@ -685,7 +746,6 @@ function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800 font-mono">
-                      {/* أقل من 60 يوم */}
                       <tr className={`hover:bg-slate-800/60 ${!generalRules.collectionRules?.under60?.isActive ? 'opacity-40' : ''}`}>
                         <td className="p-3 text-center">
                           <input
@@ -728,7 +788,6 @@ function App() {
                         </td>
                       </tr>
 
-                      {/* فوق 60 يوم صافي */}
                       <tr className={`hover:bg-slate-800/60 ${!generalRules.collectionRules?.over60?.isActive ? 'opacity-40' : ''}`}>
                         <td className="p-3 text-center">
                           <input
@@ -787,7 +846,7 @@ function App() {
                   <i className="fa-solid fa-kitchen-set text-purple-400"></i> مطبخ تخطيط ومحاكاة الأهداف (Sandbox)
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  جرّب تفعيل أو تعطيل المجموعات والتحصيل وتغيير الشروط وشاهد الأثر المالي فوراً قبل الرفع.
+                  تعديلاتك تُحفظ تلقائياً في جلستك، وعند الاستقرار اضغط "رفع مقترح المطبخ للإدارة".
                 </p>
               </div>
 
