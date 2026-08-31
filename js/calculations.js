@@ -1,15 +1,8 @@
 /**
- * محرك احتساب الأداء وبوابات الاستحقاق والتحصيل المتقدم ومؤشرات المطبخ v9.5
+ * محرك احتساب الأداء وبوابات الاستحقاق والمؤشرات المالية v11.0 Master
  */
 
 const CalcEngine = {
-  getTierRate(pct, tiers) {
-    if (!tiers || !Array.isArray(tiers) || tiers.length === 0) return 0;
-    const sorted = [...tiers].sort((a, b) => Number(b.minPct) - Number(a.minPct));
-    const matched = sorted.find(t => pct >= Number(t.minPct));
-    return matched ? Number(matched.rate || 0) : 0;
-  },
-
   processRepData(rep, generalRules, groupRules) {
     if (!rep) return null;
 
@@ -17,7 +10,7 @@ const CalcEngine = {
     const gRules = generalRules || CONFIG.DEFAULT_GENERAL_RULES;
     const grpRulesList = (groupRules && Array.isArray(groupRules)) ? groupRules : CONFIG.FALLBACK_GROUPS;
 
-    // 1. بوابة الهدف العام
+    // 1. تقييم الهدف العام
     const genTarget = Number(rep.generalTarget) || 0;
     const genSales = Number(rep.generalSales) || 0;
     const genPct = genTarget > 0 ? (genSales / genTarget) * 100 : 0;
@@ -27,7 +20,8 @@ const CalcEngine = {
     const passGate_GenTarget = genTarget > 0 ? (genPct >= genThresholdPct) : false;
     const remainingGenSales = genTarget > 0 ? Math.max(0, (genTarget * (genThresholdPct / 100)) - genSales) : 0;
 
-    // 2. بوابة المجموعات الـ 14 والتفكيك الفردي
+    // 2. تقييم المجموعات المكلف بها فقط (تجاهل المجموعات ذات الهدف 0)
+    let assignedGroupsCount = 0;
     let qualifiedGroupsCount = 0;
     let failedMandatoryGroups = [];
     let rawGroupCommSum = 0;
@@ -46,10 +40,13 @@ const CalcEngine = {
       const thresholdTargetSales = grpTarget * (thresholdPct / 100);
       const remainingToThreshold = grpTarget > 0 ? Math.max(0, thresholdTargetSales - grpSales) : 0;
       
-      const isQualified = isGroupActive && grpTarget > 0 && grpPct >= thresholdPct;
+      // لا يُعد مؤهلاً ولا مكلفاً إلا إذا كان الهدف أكبر من صفر
+      const isAssigned = grpTarget > 0;
+      const isQualified = isGroupActive && isAssigned && (grpPct >= thresholdPct);
 
+      if (isAssigned) assignedGroupsCount++;
       if (isQualified) qualifiedGroupsCount++;
-      if (isGroupMandatory && !isQualified) {
+      if (isGroupMandatory && isAssigned && !isQualified) {
         failedMandatoryGroups.push(rule.name);
       }
 
@@ -77,6 +74,7 @@ const CalcEngine = {
         target: grpTarget,
         sales: grpSales,
         customComm: repGrp.customComm,
+        isAssigned,
         isActive: isGroupActive,
         isMandatory: isGroupMandatory,
         thresholdPct,
@@ -94,32 +92,29 @@ const CalcEngine = {
     const passGate_MinGroupsCount = qualifiedGroupsCount >= minGroupsReq;
     const passGate_MandatoryGroups = failedMandatoryGroups.length === 0;
 
-    // 3. التحصيل
+    // 3. التحصيل الصافي
     const collRules = gRules.collectionRules || {
       isCollMandatory: false,
       thresholdPct: 30,
       commType: 'percent',
-      commValue: 0.5,
-      over60: {
-        isMandatory: false,
-        thresholdPct: 40,
-        tiers: [{ minPct: 40, rate: 0.01 }, { minPct: 50, rate: 0.02 }]
-      },
-      under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 }
+      commValue: 0.5
     };
 
     const debt = Number(rep.debt) || 0;
     const collection = Number(rep.collection) || 0;
     const overallCollPct = debt > 0 ? (collection / debt) * 100 : 0;
+    const passGate_Collection = overallCollPct >= Number(collRules.thresholdPct || 30);
 
     let totalCollectionCommission = 0;
-    if (collRules.commType === 'percent') {
-      totalCollectionCommission = collection * (Number(collRules.commValue || 0.5) / 100);
-    } else {
-      totalCollectionCommission = Number(collRules.commValue || 0);
+    if (passGate_Collection) {
+      if (collRules.commType === 'percent') {
+        totalCollectionCommission = collection * (Number(collRules.commValue || 0.5) / 100);
+      } else {
+        totalCollectionCommission = Number(collRules.commValue || 0);
+      }
     }
 
-    // 4. استحقاق العمولات التراكمي
+    // 4. تقييم استحقاق العمولات
     const meetsGenTargetReq = !isGenTargetMandatory || passGate_GenTarget;
     const isEligibleForGroupCommissions = isRepActive && meetsGenTargetReq && passGate_MandatoryGroups && passGate_MinGroupsCount;
     const totalGroupCommissionEarned = isEligibleForGroupCommissions ? rawGroupCommSum : 0;
@@ -139,10 +134,10 @@ const CalcEngine = {
       blockers.push(`باقي للهدف العام ${Math.round(remainingGenSales).toLocaleString()} ر.س`);
     }
     if (!passGate_MandatoryGroups) {
-      blockers.push(`أصناف إلزامية غير مكتملة: [${failedMandatoryGroups.join('، ')}]`);
+      blockers.push(`أصناف إلزامية غير محققة: [${failedMandatoryGroups.join('، ')}]`);
     }
     if (!passGate_MinGroupsCount) {
-      blockers.push(`حقق ${qualifiedGroupsCount} من أصل ${minGroupsReq} مجموعات`);
+      blockers.push(`حقق ${qualifiedGroupsCount} من أصل ${minGroupsReq} مجموعات مطلوبة`);
     }
 
     const eligibilityStatusText = blockers.length === 0 ? 'مستحق بالكامل ✅' : `محجوبة: ${blockers.join(' | ')}`;
@@ -158,6 +153,7 @@ const CalcEngine = {
       isGeneralTargetQualified: isEligibleForGenTargetComm,
       generalTargetCommEarned,
       isGroupsGateQualified: isEligibleForGroupCommissions,
+      assignedGroupsCount,
       qualifiedGroupsCount,
       minGroupsReq,
       failedMandatoryGroups,
@@ -226,7 +222,7 @@ const CalcEngine = {
           const rGrp = rep.groups[gIdx];
           const t = Number(rGrp.target) || 0;
           const s = Number(rGrp.sales) || 0;
-          if (t > 0 || s > 0) assignedRepsCount++;
+          if (t > 0) assignedRepsCount++;
           totalTarget += t;
           totalSales += s;
 
@@ -274,7 +270,7 @@ const CalcEngine = {
       (processedReps || []).forEach(rep => {
         if (rep.isActive !== false) {
           const grp = rep.detailedGroups ? rep.detailedGroups[gIdx] : null;
-          if (grp && grp.isActive) {
+          if (grp && grp.isActive && grp.isAssigned) {
             totalTarget += grp.target || 0;
             totalSales += grp.sales || 0;
 
