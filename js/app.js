@@ -15,7 +15,7 @@ function App() {
   const [monthKey, setMonthKey] = useState('2026-08');
   const [monthStatus, setMonthStatus] = useState('open');
   const [activeProposalInfo, setActiveProposalInfo] = useState(null);
-  const [activeTab, setActiveTab] = useState('config');
+  const [activeTab, setActiveTab] = useState('config'); // يبدأ من العقل المدبر
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRep, setSelectedRep] = useState(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -35,9 +35,9 @@ function App() {
     minGroupsRequired: 7,
     collectionRules: {
       isCollMandatory: false,
-      thresholdPct: 30,
-      commType: 'percent',
-      commValue: 0.5
+      thresholdPct: 60,
+      commType: 'fixed',
+      commValue: 500
     }
   });
 
@@ -94,16 +94,21 @@ function App() {
             minGroupsRequired: data.generalRules.minGroupsRequired ?? 7,
             collectionRules: data.generalRules.collectionRules || {
               isCollMandatory: false,
-              thresholdPct: 30,
-              commType: 'percent',
-              commValue: 0.5
+              thresholdPct: 60,
+              commType: 'fixed',
+              commValue: 500
             }
           };
           setGeneralRules(mergedRules);
           if (!kitchenGeneralRules) setKitchenGeneralRules(JSON.parse(JSON.stringify(mergedRules)));
         }
         if (data.groupRules && data.groupRules.length > 0) {
-          const formattedGroups = data.groupRules.map(g => ({ ...g, isActive: g.isActive !== false, isMandatory: g.isMandatory === true }));
+          const formattedGroups = data.groupRules.map(g => ({
+            ...g,
+            codes: Array.isArray(g.codes) ? g.codes : String(g.codes || '').split(',').map(c => c.trim()).filter(Boolean),
+            isActive: g.isActive !== false,
+            isMandatory: g.isMandatory === true
+          }));
           setGroupRules(formattedGroups);
           if (!kitchenGroupRules) setKitchenGroupRules(JSON.parse(JSON.stringify(formattedGroups)));
         }
@@ -140,7 +145,7 @@ function App() {
         groupRules,
         reps: repsData
       }, currentUser);
-      showToast(res.message || 'تم حفظ وتثبيت القواعد والأهداف الرسمية بنجاح 🔒');
+      showToast(res.message || 'تم حفظ وتثبيت القواعد والأهداف بنجاح 🔒');
       loadData(currentUser);
     } catch (err) {
       showToast('تم حفظ التعديلات');
@@ -181,7 +186,7 @@ function App() {
             return match ? { ...r, generalTarget: match.generalTarget, groups: match.groups || r.groups } : r;
           }));
         }
-        showToast('تم استيراد واعتماد مقترح المشرف في القواعد الرسمية');
+        showToast('تم اعتماد وتطبيق مقترح المشرف في القواعد الرسمية');
         setShowProposalDiffModal(false);
       } catch(e){
         showToast('حدث خطأ أثناء قراءة المقترح');
@@ -197,7 +202,7 @@ function App() {
     setSyncLoading(true);
     try {
       const res = await ApiService.approveMonth(monthKey, currentUser);
-      showToast(res.message || 'تم الاعتماد النهائي وإقفال الشهر المالي 🔒');
+      showToast(res.message || 'تم الاعتماد النهائي وإقفال الشهر 🔒');
       setMonthStatus('approved');
       loadData(currentUser);
     } catch (err) {
@@ -214,7 +219,14 @@ function App() {
     setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
   };
 
-  // دوال تخصيص وتفكيك المطبخ
+  // تعديل الأكواد المدمجة للمجموعة
+  const updateGroupCodes = (gIdx, codesStr) => {
+    const updated = [...groupRules];
+    updated[gIdx] = { ...updated[gIdx], codes: codesStr.split(',').map(c => c.trim()).filter(Boolean) };
+    setGroupRules(updated);
+  };
+
+  // دوال تخصيص المطبخ
   const updateKitchenGroupRule = (gIdx, field, val) => {
     const updated = JSON.parse(JSON.stringify(kitchenGroupRules || groupRules));
     updated[gIdx] = { ...updated[gIdx], [field]: val === '' ? '' : (field === 'thresholdPct' || field === 'commValue' ? Number(val) : val) };
@@ -267,6 +279,7 @@ function App() {
       const newGrp = {
         id: (kitchenGroupRules || groupRules).length,
         name: name.trim(),
+        codes: [],
         thresholdPct: 70,
         commType: 'fixed',
         commValue: 250,
@@ -527,16 +540,16 @@ function App() {
           </div>
         )}
 
-        {/* TAB 1: إعدادات البوابات والتحصيل الرسمية */}
+        {/* TAB 1: إعدادات البوابات والتحصيل والدمج (العقل المدبر) */}
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="space-y-6">
             <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
                 <div>
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <i className="fa-solid fa-sliders text-amber-400"></i> إدارة بوابات الاستحقاق وشروط العمولات الرسمية
+                    <i className="fa-solid fa-sliders text-amber-400"></i> إدارة بوابات الاستحقاق وشروط العمولات والدمج الرسمي
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في جعل الشروط أساسية أو اختيارية وتحديد نسب التأهل (الحساب لحظي ومباشر)</p>
+                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في الأكواد المدمجة والشروط والنسب والعمولات (الحساب لحظي ومباشر)</p>
                 </div>
                 
                 <div className="flex items-center gap-2">
@@ -609,22 +622,23 @@ function App() {
                 </div>
               </div>
 
-              {/* جدول المجموعات الـ 14 */}
+              {/* جدول المجموعات وأكواد الجمع الديناميكية */}
               <div className="space-y-3 pt-2">
                 <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
-                  <i className="fa-solid fa-boxes-stacked"></i> شروط المجموعات الـ 14 (تحديد المجموعات الإلزامية الأساسية ⭐):
+                  <i className="fa-solid fa-boxes-stacked"></i> شروط المجموعات وتحديد الأكواد المدمجة (تعديل الأكواد والعمولات مباشرة):
                 </h3>
                 <div className="overflow-x-auto border border-slate-700 rounded-xl">
                   <table className="w-full text-xs text-right bg-slate-900">
                     <thead className="bg-slate-950 text-slate-300 border-b border-slate-700">
                       <tr>
                         <th className="p-3 text-center">تفعيل ✅</th>
-                        <th className="p-3 text-center">مجموعة إلزامية أساسية ⭐</th>
+                        <th className="p-3 text-center">أساسية ⭐</th>
                         <th className="p-3">#</th>
                         <th className="p-3">اسم المجموعة</th>
+                        <th className="p-3 text-amber-300 font-mono">أكواد الجمع المدمجة (Category Codes)</th>
                         <th className="p-3">نسبة الشرط (%)</th>
                         <th className="p-3">نوع العمولة</th>
-                        <th className="p-3">قيمة العمولة (ر.س / %)</th>
+                        <th className="p-3">قيمة العمولة (ر.س)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800 font-mono">
@@ -660,6 +674,16 @@ function App() {
                           <td className="p-3 font-sans font-bold text-white text-sm">{grpRule.name}</td>
                           <td className="p-3">
                             <input
+                              type="text"
+                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                              value={Array.isArray(grpRule.codes) ? grpRule.codes.join(', ') : (grpRule.codes || '')}
+                              onChange={(e) => updateGroupCodes(idx, e.target.value)}
+                              placeholder="مثال: 2010, 12020"
+                              className="w-48 bg-slate-950 border border-amber-500/40 rounded p-1.5 text-center text-amber-300 font-bold"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <input
                               type="number"
                               disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
                               value={grpRule.thresholdPct ?? 70}
@@ -668,7 +692,7 @@ function App() {
                                 updated[idx] = { ...updated[idx], thresholdPct: e.target.value === '' ? '' : Number(e.target.value) };
                                 setGroupRules(updated);
                               }}
-                              className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-teal-300 font-bold"
+                              className="w-16 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-teal-300 font-bold"
                             />
                           </td>
                           <td className="p-3 font-sans">
@@ -690,13 +714,13 @@ function App() {
                             <input
                               type="number"
                               disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
-                              value={grpRule.commValue ?? 250}
+                              value={grpRule.commValue}
                               onChange={(e) => {
                                 const updated = [...groupRules];
                                 updated[idx] = { ...updated[idx], commValue: e.target.value === '' ? '' : Number(e.target.value) };
                                 setGroupRules(updated);
                               }}
-                              className="w-24 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
+                              className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
                             />
                           </td>
                         </tr>
@@ -706,7 +730,7 @@ function App() {
                 </div>
               </div>
 
-              {/* شروط وعمولات التحصيل الصافي */}
+              {/* التحصيل */}
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
                 <h3 className="text-xs font-bold text-blue-300">شروط وعمولة التحصيل الإجمالي (صافي بعد استبعاد المتعثرات):</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
@@ -715,7 +739,7 @@ function App() {
                     <input
                       type="number"
                       disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.collectionRules?.thresholdPct ?? 30}
+                      value={generalRules.collectionRules?.thresholdPct ?? 60}
                       onChange={(e) => {
                         setGeneralRules({
                           ...generalRules,
@@ -726,11 +750,11 @@ function App() {
                     />
                   </div>
                   <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block mb-1 font-sans">قيمة عمولة التحصيل (% أو ر.س)</span>
+                    <span className="text-slate-400 block mb-1 font-sans">قيمة عمولة التحصيل (مبلغ ثابت ر.س)</span>
                     <input
                       type="number"
                       disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.collectionRules?.commValue ?? 0.5}
+                      value={generalRules.collectionRules?.commValue ?? 500}
                       onChange={(e) => {
                         setGeneralRules({
                           ...generalRules,
@@ -741,7 +765,7 @@ function App() {
                     />
                   </div>
                   <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-center font-sans text-slate-300">
-                    <span>تحتسب كنسبة من التحصيل الصافي</span>
+                    <span>عمولة ثابتة 500 ر.س عند تحقيق $\ge 60\%$</span>
                   </div>
                 </div>
               </div>
@@ -749,7 +773,7 @@ function App() {
           </div>
         )}
 
-        {/* TAB 2: المطبخ الرئيسي */}
+        {/* TAB 2: المطبخ الرئيسي لتخطيط الأهداف والعمولات */}
         {activeTab === 'kitchen' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-3xl border border-purple-500/40 shadow-2xl space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
@@ -758,7 +782,7 @@ function App() {
                   <i className="fa-solid fa-kitchen-set text-purple-400"></i> المطبخ الرئيسي لتخطيط الأهداف والعمولات / الحوافز
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  تحكم دقيق بالأصناف الاستراتيجية وتفكيك الأهداف وتخصيص العمولات الفردية مع المزامنة اللحظية.
+                  تحكم دقيق بالأصناف وتفكيك الأهداف وتخصيص العمولات الفردية مع المزامنة اللحظية.
                 </p>
               </div>
 
@@ -1078,7 +1102,7 @@ function App() {
           </div>
         )}
 
-        {/* TAB 4: التحليل المالي للمجموعات */}
+        {/* TAB 4: التحليل المالي */}
         {activeTab === 'analytics' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
