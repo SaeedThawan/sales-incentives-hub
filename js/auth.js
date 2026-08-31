@@ -28,7 +28,6 @@ const AuthService = {
       });
       return await res.json();
     } catch (err) {
-      // وضع العمل دون اتصال (Offline Mock Fallback)
       if (username === 'admin') {
         return { status: 'success', user: { userId: 1, username: 'admin', fullName: 'المدير العام', role: 'manager' } };
       } else if (username === 'supervisor') {
