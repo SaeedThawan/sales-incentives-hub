@@ -26,39 +26,57 @@ function App() {
 
   // القواعد الرسمية المعتمدة
   const [generalRules, setGeneralRules] = useState({
+    isGenTargetMandatory: true,
     generalThresholdPct: 80,
     generalTargetCommValue: 500,
     minGroupsRequired: 7,
     collectionRules: {
-      under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 },
-      over60: { isActive: true, thresholdPct: 40, commType: 'percent', commValue: 1.0 }
+      isCollMandatory: true,
+      over60: {
+        isMandatory: true,
+        thresholdPct: 40,
+        tiers: [
+          { minPct: 40, rate: 0.01 },
+          { minPct: 50, rate: 0.02 }
+        ]
+      },
+      under60: {
+        isActive: true,
+        thresholdPct: 30,
+        commType: 'percent',
+        commValue: 0.5
+      }
     }
   });
 
   const [groupRules, setGroupRules] = useState(
-    CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true }))
+    CONFIG.FALLBACK_GROUPS.map((g, idx) => ({ 
+      ...g, 
+      isActive: true,
+      isMandatory: idx === 0 // المجموعة الأولى إلزامية افتراضياً للتوضيح
+    }))
   );
 
   const [repsData, setRepsData] = useState([]);
 
-  // مطبخ التخطيط (أهداف وقواعد تجريبية للمشرف)
+  // المطبخ التجريبي المستقل
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(() => {
     try {
-      const saved = localStorage.getItem('kitchen_gen_rules');
+      const saved = localStorage.getItem('kitchen_gen_rules_v7');
       return saved ? JSON.parse(saved) : null;
     } catch(e){ return null; }
   });
 
   const [kitchenGroupRules, setKitchenGroupRules] = useState(() => {
     try {
-      const saved = localStorage.getItem('kitchen_grp_rules');
+      const saved = localStorage.getItem('kitchen_grp_rules_v7');
       return saved ? JSON.parse(saved) : null;
     } catch(e){ return null; }
   });
 
   const [kitchenRepsData, setKitchenRepsData] = useState(() => {
     try {
-      const saved = localStorage.getItem('kitchen_reps_data');
+      const saved = localStorage.getItem('kitchen_reps_data_v7');
       return saved ? JSON.parse(saved) : null;
     } catch(e){ return null; }
   });
@@ -66,15 +84,15 @@ function App() {
   const [isKitchenApplied, setIsKitchenApplied] = useState(false);
 
   useEffect(() => {
-    if (kitchenGeneralRules) localStorage.setItem('kitchen_gen_rules', JSON.stringify(kitchenGeneralRules));
+    if (kitchenGeneralRules) localStorage.setItem('kitchen_gen_rules_v7', JSON.stringify(kitchenGeneralRules));
   }, [kitchenGeneralRules]);
 
   useEffect(() => {
-    if (kitchenGroupRules) localStorage.setItem('kitchen_grp_rules', JSON.stringify(kitchenGroupRules));
+    if (kitchenGroupRules) localStorage.setItem('kitchen_grp_rules_v7', JSON.stringify(kitchenGroupRules));
   }, [kitchenGroupRules]);
 
   useEffect(() => {
-    if (kitchenRepsData) localStorage.setItem('kitchen_reps_data', JSON.stringify(kitchenRepsData));
+    if (kitchenRepsData) localStorage.setItem('kitchen_reps_data_v7', JSON.stringify(kitchenRepsData));
   }, [kitchenRepsData]);
 
   const showToast = (msg) => {
@@ -112,19 +130,29 @@ function App() {
       if (data && data.status === 'success') {
         if (data.generalRules) {
           const mergedRules = {
+            isGenTargetMandatory: data.generalRules.isGenTargetMandatory !== false,
             generalThresholdPct: data.generalRules.generalThresholdPct ?? 80,
             generalTargetCommValue: data.generalRules.generalTargetCommValue ?? 500,
             minGroupsRequired: data.generalRules.minGroupsRequired ?? 7,
             collectionRules: data.generalRules.collectionRules || {
-              under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 },
-              over60: { isActive: true, thresholdPct: 40, commType: 'percent', commValue: 1.0 }
+              isCollMandatory: true,
+              over60: {
+                isMandatory: true,
+                thresholdPct: 40,
+                tiers: [{ minPct: 40, rate: 0.01 }, { minPct: 50, rate: 0.02 }]
+              },
+              under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 }
             }
           };
           setGeneralRules(mergedRules);
           if (!kitchenGeneralRules) setKitchenGeneralRules(mergedRules);
         }
         if (data.groupRules && data.groupRules.length > 0) {
-          const formattedGroups = data.groupRules.map(g => ({ ...g, isActive: g.isActive !== false }));
+          const formattedGroups = data.groupRules.map(g => ({ 
+            ...g, 
+            isActive: g.isActive !== false,
+            isMandatory: g.isMandatory === true
+          }));
           setGroupRules(formattedGroups);
           if (!kitchenGroupRules) setKitchenGroupRules(formattedGroups);
         }
@@ -151,17 +179,14 @@ function App() {
     if (currentUser) loadData(currentUser);
   }, []);
 
-  // تعديل أهداف المندوب في الجدول الرسمي (المدير العام)
+  const toggleRepActive = (repId) => {
+    setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, isActive: !r.isActive } : r));
+  };
+
   const updateOfficialRepTarget = (repId, val) => {
     setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
   };
 
-  // تعديل أهداف المندوب في المطبخ (المشرف)
-  const updateKitchenRepTarget = (repId, val) => {
-    setKitchenRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
-  };
-
-  // حفظ وتثبيت القواعد والأهداف الرسمية للشهر (المدير العام)
   const handleSaveOfficialConfig = async () => {
     if (currentUser.role !== 'manager') {
       showToast('صلاحية الحفظ والتثبيت الرسمي للمدير العام فقط');
@@ -174,35 +199,32 @@ function App() {
         groupRules,
         reps: repsData
       }, currentUser);
-      showToast(res.message || 'تم تثبيت الشروط والأهداف الرسمية بنجاح 🔒');
+      showToast(res.message || 'تم تثبيت الشروط والبوابات الرسمية بنجاح 🔒');
       loadData(currentUser);
     } catch (err) {
-      showToast('تم الحفظ محلياً');
+      showToast('تم حفظ التعديلات');
     }
     setSyncLoading(false);
   };
 
-  // رفع المقترح الشامل من المطبخ للإدارة (المشرف)
   const handleSaveSupervisorProposal = async () => {
     setSyncLoading(true);
     try {
       const proposalPayload = {
         generalRules: kitchenGeneralRules,
         groupRules: kitchenGroupRules,
-        repsTargets: kitchenRepsData.map(r => ({ id: r.id, name: r.name, generalTarget: r.generalTarget, groups: r.groups }))
+        repsTargets: (kitchenRepsData || repsData).map(r => ({ id: r.id, name: r.name, generalTarget: r.generalTarget, groups: r.groups }))
       };
       const res = await ApiService.saveProposal(monthKey, proposalPayload, currentUser);
       showToast(res.message || 'تم رفع مقترح المطبخ بنجاح للإدارة');
       setMonthStatus('pending_approval');
       loadData(currentUser);
     } catch (err) {
-      showToast('تم حفظ المقترح محلياً');
-      setMonthStatus('pending_approval');
+      showToast('تم حفظ المقترح');
     }
     setSyncLoading(false);
   };
 
-  // اعتماد وتطبيق مقترح المشرف في القواعد الرسمية (المدير العام)
   const handleAdoptProposal = () => {
     if (activeProposalInfo && activeProposalInfo.customRules) {
       try {
@@ -292,7 +314,6 @@ function App() {
     return (currentUser && currentUser.role === 'rep' && visibleReps.length > 0) ? visibleReps[0] : null;
   }, [currentUser, visibleReps]);
 
-  // استخراج المقترح للمقارنة
   const parsedProposal = useMemo(() => {
     if (!activeProposalInfo || !activeProposalInfo.customRules) return null;
     try {
@@ -452,13 +473,13 @@ function App() {
               onClick={() => setActiveTab('summary')}
               className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${activeTab === 'summary' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900 text-slate-300'}`}
             >
-              <i className="fa-solid fa-table-list"></i> خلاصة المندوبين
+              <i className="fa-solid fa-table-list"></i> خلاصة المندوبين وبوابات الاستحقاق
             </button>
             <button
               onClick={() => setActiveTab('config')}
               className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${activeTab === 'config' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 text-slate-300'}`}
             >
-              <i className="fa-solid fa-sliders"></i> إعدادات الشروط والتحصيل الرسمية 🔒
+              <i className="fa-solid fa-sliders"></i> إعدادات البوابات والشروط الرسمية 🔒
             </button>
             <button
               onClick={() => setActiveTab('proposals')}
@@ -483,7 +504,7 @@ function App() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 mt-6">
-        {/* واجهة المندوب الخاصة */}
+        {/* واجهة المندوب الفردية */}
         {currentUser.role === 'rep' && currentRep ? (
           <div className="space-y-6">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -495,44 +516,42 @@ function App() {
               <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
                 <span className="text-slate-400 text-xs block mb-1">المبيعات المحققة</span>
                 <span className="text-base font-extrabold text-white font-mono">{formatNum(currentRep.genSales)}</span>
-                <span className={`text-[10px] block mt-0.5 font-bold ${currentRep.passGate1_GeneralTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span className={`text-[10px] block mt-0.5 font-bold ${currentRep.passGate_GenTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
                   الإنجاز: {currentRep.genPct.toFixed(1)}%
                 </span>
               </div>
               <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
-                <span className="text-slate-400 text-xs block mb-1">المجموعات المحققة</span>
+                <span className="text-slate-400 text-xs block mb-1">عمولة الهدف العام</span>
+                <span className="text-base font-extrabold text-amber-300 font-mono">{formatNum(currentRep.generalTargetCommEarned)} ر.س</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {currentRep.isGeneralTargetQualified ? 'مستحقة ✅' : `متبقي ${formatNum(currentRep.remainingGenSales)} ر.س`}
+                </span>
+              </div>
+              <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
+                <span className="text-slate-400 text-xs block mb-1">المجموعات المؤهلة</span>
                 <span className="text-base font-extrabold text-teal-300 font-mono">{currentRep.qualifiedGroupsCount} / 14</span>
-                <span className={`text-[10px] block mt-0.5 font-bold ${currentRep.passGate2_MinGroups ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {currentRep.passGate2_MinGroups ? 'تأهل المجموعات ✅' : 'غير متأهل ❌'}
+                <span className={`text-[10px] block mt-0.5 font-bold ${currentRep.isGroupsGateQualified ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {currentRep.isGroupsGateQualified ? 'مؤهل للمجموعات ✅' : 'حالة الحجب ❌'}
                 </span>
               </div>
               <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
                 <span className="text-slate-400 text-xs block mb-1">عمولة المجموعات</span>
                 <span className="text-base font-extrabold text-teal-300 font-mono">{formatNum(currentRep.totalGroupCommissionEarned)} ر.س</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">من الأصناف المؤهلة</span>
-              </div>
-              <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
-                <span className="text-slate-400 text-xs block mb-1">عمولة التحصيل</span>
-                <span className="text-base font-extrabold text-blue-300 font-mono">{formatNum(currentRep.collectionCommission)} ر.س</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">تحصيل {formatNum(currentRep.collection)}</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">الأصناف المؤهلة</span>
               </div>
               <div className="bg-slate-800 border border-emerald-500/40 bg-emerald-950/20 p-4 rounded-2xl shadow-md">
                 <span className="text-emerald-300 text-xs font-bold mb-1">إجمالي المستحق لك</span>
                 <span className="text-lg font-black text-emerald-400 font-mono">{formatNum(currentRep.grandTotalCommission)} ر.س</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">مبيعات + تحصيل</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">شامل العمولات</span>
               </div>
             </div>
 
+            {/* تفاصيل المجموعات للمندوب */}
             <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-4 shadow-xl">
               <div className="flex justify-between items-center border-b border-slate-700 pb-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <i className="fa-solid fa-boxes-stacked text-teal-400"></i> تفاصيل مبيعات وأهداف المجموعات الـ 14 الخاصة بك:
                 </h3>
-                <span className="text-xs text-slate-400 font-sans">
-                  حالة الهدف العام: <b className={currentRep.passGate1_GeneralTarget ? 'text-emerald-400' : 'text-rose-400'}>
-                    {currentRep.passGate1_GeneralTarget ? 'متحقق ✅' : `متبقي ${formatNum(currentRep.remainingGenSales)} ر.س`}
-                  </b>
-                </span>
               </div>
 
               <div className="overflow-x-auto border border-slate-700 rounded-xl">
@@ -541,6 +560,7 @@ function App() {
                     <tr>
                       <th className="p-3">#</th>
                       <th className="p-3">اسم المجموعة</th>
+                      <th className="p-3">نوع المجموعة</th>
                       <th className="p-3">الهدف المطلوب</th>
                       <th className="p-3">المبيعات المحققة</th>
                       <th className="p-3">نسبة الإنجاز</th>
@@ -554,6 +574,13 @@ function App() {
                       <tr key={idx} className={grp.isQualified ? 'bg-emerald-950/20' : 'hover:bg-slate-700/30'}>
                         <td className="p-3 text-slate-500 font-sans">{idx + 1}</td>
                         <td className="p-3 font-sans font-bold text-white">{grp.name}</td>
+                        <td className="p-3 font-sans">
+                          {grp.isMandatory ? (
+                            <span className="bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded text-[10px] font-bold">إلزامية أساسية ⭐</span>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">اختيارية</span>
+                          )}
+                        </td>
                         <td className="p-3">{formatNum(grp.target)}</td>
                         <td className="p-3 font-bold text-emerald-400">{formatNum(grp.sales)}</td>
                         <td className="p-3">
@@ -576,7 +603,7 @@ function App() {
                           )}
                         </td>
                         <td className="p-3 text-teal-300 font-bold">
-                          {formatNum(currentRep.isEligibleForSalesCommissions ? grp.potentialComm : 0)} ر.س
+                          {formatNum(grp.commEarned)} ر.س
                         </td>
                       </tr>
                     ))}
@@ -605,7 +632,7 @@ function App() {
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1">عمولات المجموعات</span>
               <span className="text-base font-extrabold text-teal-300 font-mono">{formatNum(companyTotals.groupCommSum)} ر.س</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">{companyTotals.qualifiedRepsCount} مستحقين</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">{companyTotals.qualifiedGroupsCount} مندوبين مستحقين</span>
             </div>
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1">عمولة الهدف العام</span>
@@ -617,13 +644,13 @@ function App() {
               <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">({companyTotals.overallCollPct.toFixed(1)}% من الدين)</span>
             </div>
             <div className="bg-slate-800 border border-emerald-500/40 bg-emerald-950/20 p-3.5 rounded-2xl">
-              <span className="text-emerald-300 text-xs font-bold mb-1">إجمالي كافة العمولات</span>
+              <span className="text-emerald-300 text-xs font-bold mb-1">إجمالي العمولات المستحقة</span>
               <span className="text-lg font-black text-emerald-400 font-mono">{formatNum(companyTotals.grandComm)} ر.س</span>
             </div>
           </div>
         )}
 
-        {/* Tab 1: Summary Table مع إمكانية تعديل أهداف المناديب مباشرة للمدير */}
+        {/* Tab 1: Summary Table مع بوابات الشفافية */}
         {activeTab === 'summary' && currentUser.role !== 'rep' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
@@ -638,28 +665,15 @@ function App() {
                 />
               </div>
 
-              {currentUser.role === 'manager' && (
-                <div className="flex items-center gap-2">
-                  {activeProposalInfo && (
-                    <button
-                      onClick={() => setShowProposalDiffModal(true)}
-                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md"
-                    >
-                      <i className="fa-solid fa-code-compare text-amber-300"></i>
-                      <span>مقارنة مقترح المشرف 🔍</span>
-                    </button>
-                  )}
-                  {monthStatus !== 'approved' && (
-                    <button
-                      onClick={handleSaveOfficialConfig}
-                      disabled={syncLoading}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
-                    >
-                      <i className="fa-solid fa-floppy-disk text-amber-300"></i>
-                      <span>حفظ الأهداف والعمولات الرسمية 💾</span>
-                    </button>
-                  )}
-                </div>
+              {currentUser.role === 'manager' && monthStatus !== 'approved' && (
+                <button
+                  onClick={handleSaveOfficialConfig}
+                  disabled={syncLoading}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+                >
+                  <i className="fa-solid fa-floppy-disk text-amber-300"></i>
+                  <span>حفظ وتثبيت الأهداف والعمولات 💾</span>
+                </button>
               )}
             </div>
 
@@ -668,24 +682,33 @@ function App() {
                 <table className="w-full text-xs text-right text-slate-200">
                   <thead className="bg-slate-900 text-slate-300 uppercase text-[11px] font-extrabold border-b border-slate-700">
                     <tr>
+                      <th className="py-3.5 px-3 text-center">تفعيل ✅</th>
                       <th className="py-3.5 px-3">#</th>
                       <th className="py-3.5 px-3">اسم المندوب</th>
-                      <th className="py-3.5 px-3">الهدف العام (تعديل)</th>
+                      <th className="py-3.5 px-3">الهدف العام</th>
                       <th className="py-3.5 px-3">المبيعات</th>
                       <th className="py-3.5 px-3">نسبة الإنجاز</th>
-                      <th className="py-3.5 px-3">المتبقي للشرط</th>
                       <th className="py-3.5 px-3 text-amber-300">عمولة الهدف</th>
-                      <th className="py-3.5 px-3 text-center">المجموعات</th>
-                      <th className="py-3.5 px-3">التحصيل</th>
-                      <th className="py-3.5 px-3 text-blue-300">عمولة التحصيل</th>
+                      <th className="py-3.5 px-3 text-center">المجموعات المؤهلة</th>
                       <th className="py-3.5 px-3 text-teal-300">عمولة المجموعات</th>
+                      <th className="py-3.5 px-3">التحصيل &gt;60يوم</th>
+                      <th className="py-3.5 px-3 text-blue-300">عمولة التحصيل</th>
                       <th className="py-3.5 px-3 text-emerald-300 font-black">إجمالي المستحق</th>
+                      <th className="py-3.5 px-3">حالة البوابات والشروط</th>
                       <th className="py-3.5 px-3 text-center">تفاصيل</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/60 font-mono">
                     {visibleReps.map((rep) => (
                       <tr key={rep.id} className={`hover:bg-slate-700/40 ${!rep.isActive ? 'opacity-35 bg-slate-950/60' : ''}`}>
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={rep.isActive !== false}
+                            onChange={() => toggleRepActive(rep.id)}
+                            className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                          />
+                        </td>
                         <td className="py-3 px-3 text-slate-400">{rep.id}</td>
                         <td className="py-3 px-3 font-sans font-bold text-white">{rep.name}</td>
                         <td className="py-3 px-3">
@@ -699,33 +722,33 @@ function App() {
                         </td>
                         <td className="py-3 px-3 font-bold text-white">{formatNum(rep.genSales)}</td>
                         <td className="py-3 px-3">
-                          <span className={`font-bold ${rep.passGate1_GeneralTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <span className={`font-bold ${rep.passGate_GenTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {rep.genPct.toFixed(1)}%
                           </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          {rep.remainingGenSales > 0 ? (
-                            <span className="text-rose-300 font-sans">{formatNum(rep.remainingGenSales)} ر.س</span>
-                          ) : (
-                            <span className="text-emerald-400 font-sans font-bold">مكتمل ✅</span>
-                          )}
                         </td>
                         <td className="py-3 px-3 text-amber-300 font-bold">{formatNum(rep.generalTargetCommEarned)}</td>
                         <td className="py-3 px-3 text-center">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            rep.passGate2_MinGroups ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-950 text-rose-300'
+                            rep.isGroupsGateQualified ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-950 text-rose-300'
                           }`}>
                             {rep.qualifiedGroupsCount} / 14
                           </span>
                         </td>
+                        <td className="py-3 px-3 text-teal-300 font-bold">{formatNum(rep.totalGroupCommissionEarned)}</td>
                         <td className="py-3 px-3">
-                          <div>{formatNum(rep.collection)}</div>
-                          <span className="text-[10px] text-slate-400 block font-sans">({rep.debt > 0 ? ((rep.collection / rep.debt) * 100).toFixed(1) : 0}%)</span>
+                          <div>{formatNum(rep.collOver60)}</div>
+                          <span className={`text-[10px] block font-sans ${rep.passGate_Over60 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                            ({rep.collOver60Pct.toFixed(1)}%)
+                          </span>
                         </td>
                         <td className="py-3 px-3 text-blue-300 font-bold">{formatNum(rep.collectionCommission)}</td>
-                        <td className="py-3 px-3 text-teal-300 font-bold">{formatNum(rep.totalGroupCommissionEarned)}</td>
                         <td className="py-3 px-3 bg-emerald-950/30 font-black text-emerald-400 text-sm">
                           {formatNum(rep.grandTotalCommission)} ر.س
+                        </td>
+                        <td className="py-3 px-3 font-sans text-[11px]">
+                          <span className={rep.isGroupsGateQualified ? 'text-emerald-400 font-bold' : 'text-rose-300'}>
+                            {rep.eligibilityStatusText}
+                          </span>
                         </td>
                         <td className="py-3 px-3 text-center">
                           <button
@@ -744,76 +767,89 @@ function App() {
           </div>
         )}
 
-        {/* Tab 2: الإعدادات الرسمية المعتمدة */}
+        {/* Tab 2: إعدادات البوابات والشروط الرسمية */}
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="space-y-6">
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
                 <div>
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <i className="fa-solid fa-stamp text-amber-400"></i> القواعد والشروط الرسمية المعتمدة للشهر المالي
+                    <i className="fa-solid fa-sliders text-amber-400"></i> إدارة بوابات الاستحقاق وشروط العمولات الرسمية
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">الشروط الرسمية التي تُبنى عليها تقارير الرواتب والعمولات</p>
+                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في جعل الشروط أساسية أو اختيارية وتحديد نسب التأهل</p>
                 </div>
-                
-                <div className="flex items-center gap-2">
-                  {currentUser.role === 'manager' && monthStatus !== 'approved' && (
-                    <button
-                      onClick={handleSaveOfficialConfig}
-                      disabled={syncLoading}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
-                    >
-                      <i className="fa-solid fa-floppy-disk text-amber-300"></i>
-                      <span>حفظ وتثبيت الشروط للشهر</span>
-                    </button>
-                  )}
+                {currentUser.role === 'manager' && monthStatus !== 'approved' && (
+                  <button
+                    onClick={handleSaveOfficialConfig}
+                    disabled={syncLoading}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                  >
+                    <i className="fa-solid fa-floppy-disk text-amber-300"></i>
+                    <span>حفظ وتثبيت الشروط للشهر</span>
+                  </button>
+                )}
+              </div>
+
+              {/* 1. بوابة الهدف العام */}
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                      checked={generalRules.isGenTargetMandatory !== false}
+                      onChange={(e) => setGeneralRules({ ...generalRules, isGenTargetMandatory: e.target.checked })}
+                      className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                    />
+                    <span className="font-bold text-white text-sm">تفعيل بوابة الهدف العام كشرط إلزامي أساسي لدخول عمولات المجموعات</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-2">
+                  <div>
+                    <label className="text-slate-400 block mb-1">نسبة شرط الهدف العام (%)</label>
+                    <input
+                      type="number"
+                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                      value={generalRules.generalThresholdPct ?? 80}
+                      onChange={(e) => setGeneralRules({ ...generalRules, generalThresholdPct: e.target.value === '' ? '' : Number(e.target.value) })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-emerald-400 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">قيمة عمولة الهدف العام (ر.س - يمكن وضع 0)</label>
+                    <input
+                      type="number"
+                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                      value={generalRules.generalTargetCommValue ?? 500}
+                      onChange={(e) => setGeneralRules({ ...generalRules, generalTargetCommValue: e.target.value === '' ? '' : Number(e.target.value) })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-amber-300 font-bold font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">أدنى عدد مجموعات مطلوبة للعمولة</label>
+                    <input
+                      type="number"
+                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                      value={generalRules.minGroupsRequired ?? 7}
+                      onChange={(e) => setGeneralRules({ ...generalRules, minGroupsRequired: e.target.value === '' ? '' : Number(e.target.value) })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-teal-300 font-bold"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* بطاقات الشروط العامة */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                  <label className="text-xs font-bold text-slate-300 block mb-1">نسبة شرط الهدف العام (%)</label>
-                  <input
-                    type="number"
-                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                    value={generalRules.generalThresholdPct ?? 80}
-                    onChange={(e) => setGeneralRules({ ...generalRules, generalThresholdPct: e.target.value === '' ? '' : Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-emerald-400 text-center disabled:opacity-60"
-                  />
-                </div>
-                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                  <label className="text-xs font-bold text-slate-300 block mb-1">عمولة الهدف العام (ر.س)</label>
-                  <input
-                    type="number"
-                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                    value={generalRules.generalTargetCommValue ?? 500}
-                    onChange={(e) => setGeneralRules({ ...generalRules, generalTargetCommValue: e.target.value === '' ? '' : Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-amber-300 text-center font-mono disabled:opacity-60"
-                  />
-                </div>
-                <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
-                  <label className="text-xs font-bold text-slate-300 block mb-1">أدنى عدد مجموعات مطلوبة</label>
-                  <input
-                    type="number"
-                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                    value={generalRules.minGroupsRequired ?? 7}
-                    onChange={(e) => setGeneralRules({ ...generalRules, minGroupsRequired: e.target.value === '' ? '' : Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-bold text-teal-300 text-center disabled:opacity-60"
-                  />
-                </div>
-              </div>
-
-              {/* جدول المجموعات الـ 14 */}
-              <div className="space-y-3 pt-4 border-t border-slate-700">
+              {/* 2. جدول المجموعات الـ 14 مع خيار المجموعة الإلزامية الأساسية */}
+              <div className="space-y-3 pt-2">
                 <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
-                  <i className="fa-solid fa-boxes-stacked"></i> شروط وعمولات المجموعات الـ 14 المعتمدة:
+                  <i className="fa-solid fa-boxes-stacked"></i> شروط المجموعات الـ 14 (تحديد المجموعات الإلزامية الأساسية ⭐):
                 </h3>
                 <div className="overflow-x-auto border border-slate-700 rounded-xl">
                   <table className="w-full text-xs text-right bg-slate-900">
                     <thead className="bg-slate-950 text-slate-300 border-b border-slate-700">
                       <tr>
                         <th className="p-3 text-center">تفعيل ✅</th>
+                        <th className="p-3 text-center">مجموعة إلزامية أساسية ⭐</th>
                         <th className="p-3">#</th>
                         <th className="p-3">اسم المجموعة</th>
                         <th className="p-3">نسبة الشرط (%)</th>
@@ -837,6 +873,19 @@ function App() {
                               className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
                             />
                           </td>
+                          <td className="p-3 text-center">
+                            <input
+                              type="checkbox"
+                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
+                              checked={grpRule.isMandatory === true}
+                              onChange={(e) => {
+                                const updated = [...groupRules];
+                                updated[idx] = { ...updated[idx], isMandatory: e.target.checked };
+                                setGroupRules(updated);
+                              }}
+                              className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
+                            />
+                          </td>
                           <td className="p-3 text-slate-500 font-sans">{idx + 1}</td>
                           <td className="p-3 font-sans font-bold text-white text-sm">{grpRule.name}</td>
                           <td className="p-3">
@@ -849,7 +898,7 @@ function App() {
                                 updated[idx] = { ...updated[idx], thresholdPct: e.target.value === '' ? '' : Number(e.target.value) };
                                 setGroupRules(updated);
                               }}
-                              className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-teal-300 font-bold disabled:opacity-50"
+                              className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-teal-300 font-bold"
                             />
                           </td>
                           <td className="p-3 font-sans">
@@ -861,7 +910,7 @@ function App() {
                                 updated[idx] = { ...updated[idx], commType: e.target.value };
                                 setGroupRules(updated);
                               }}
-                              className="bg-slate-800 border border-slate-700 text-slate-200 rounded p-1.5 text-xs disabled:opacity-50"
+                              className="bg-slate-800 border border-slate-700 text-slate-200 rounded p-1.5 text-xs"
                             >
                               <option value="fixed">مبلغ ثابت (ر.س)</option>
                               <option value="percent">نسبة (% من المبيعات)</option>
@@ -877,13 +926,66 @@ function App() {
                                 updated[idx] = { ...updated[idx], commValue: e.target.value === '' ? '' : Number(e.target.value) };
                                 setGroupRules(updated);
                               }}
-                              className="w-24 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold disabled:opacity-50"
+                              className="w-24 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
                             />
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+
+              {/* 3. بوابات وشرائح التحصيل المرنة */}
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                    checked={generalRules.collectionRules?.over60?.isMandatory !== false}
+                    onChange={(e) => {
+                      setGeneralRules({
+                        ...generalRules,
+                        collectionRules: {
+                          ...generalRules.collectionRules,
+                          over60: { ...generalRules.collectionRules.over60, isMandatory: e.target.checked }
+                        }
+                      });
+                    }}
+                    className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                  />
+                  <span className="font-bold text-white text-sm">
+                    تفعيل شرط تحصيل ديون فوق 60 يوماً كبوابة أساسية (بعد استبعاد المتعثرات)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block mb-1 font-sans">شرط نسبة التأهل لتحصيل &gt;60 يوم (%)</span>
+                    <input
+                      type="number"
+                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                      value={generalRules.collectionRules?.over60?.thresholdPct ?? 40}
+                      onChange={(e) => {
+                        setGeneralRules({
+                          ...generalRules,
+                          collectionRules: {
+                            ...generalRules.collectionRules,
+                            over60: { ...generalRules.collectionRules.over60, thresholdPct: Number(e.target.value) }
+                          }
+                        });
+                      }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-center text-blue-300 font-bold"
+                    />
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block mb-1 font-sans">شرائح عمولة التحصيل &gt;60 يوم:</span>
+                    <span className="text-slate-300 block text-[11px] font-sans">
+                      • عند تحقيق $\ge 40\%$: عمولة <b>1.0%</b> من التحصيل
+                      <br/>
+                      • عند تحقيق $\ge 50\%$: عمولة <b>2.0%</b> من التحصيل
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -899,7 +1001,7 @@ function App() {
                   <i className="fa-solid fa-kitchen-set text-purple-400"></i> مطبخ تخطيط ومحاكاة الأهداف (Sandbox)
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  تعديلاتك على الأهداف والعمولات تُحفظ تلقائياً في جلستك، وعند الاستقرار اضغط "رفع مقترح المطبخ للإدارة".
+                  جرّب تغيير البوابات وشروط المجموعات والتحصيل وشاهد النتيجة فوراً قبل رفع المقترح للمدير.
                 </p>
               </div>
 
@@ -921,7 +1023,6 @@ function App() {
               </div>
             </div>
 
-            {/* تعديل الأهداف العامة في المطبخ */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                 <label className="text-xs font-bold text-purple-300 block mb-1">تجربة شرط الهدف العام (%)</label>
@@ -951,29 +1052,6 @@ function App() {
                 />
               </div>
             </div>
-
-            {/* جدول أهداف المناديب في المطبخ */}
-            <div className="space-y-3 pt-4 border-t border-slate-700">
-              <h3 className="text-sm font-bold text-purple-300 flex items-center gap-2">
-                <i className="fa-solid fa-users-gear"></i> تعديل واقتراح أهداف المناديب العامة في المطبخ:
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {(kitchenRepsData || repsData).map((rep) => (
-                  <div key={rep.id} className="bg-slate-900 border border-slate-700 p-3 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-white text-xs block">{rep.name}</span>
-                      <span className="text-[10px] text-slate-400">مندوب #{rep.id}</span>
-                    </div>
-                    <input
-                      type="number"
-                      value={rep.generalTarget}
-                      onChange={(e) => updateKitchenRepTarget(rep.id, e.target.value)}
-                      className="w-24 bg-slate-950 border border-purple-500/40 rounded p-1.5 text-center text-purple-300 font-mono font-bold text-xs"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
@@ -985,29 +1063,6 @@ function App() {
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <i className="fa-solid fa-chart-pie text-teal-400"></i> التحليل المالي والترتيب للمجموعات الـ 14
                 </h2>
-                <p className="text-xs text-slate-400 mt-0.5">فرز الأصناف وتحديد المجموعات الضعيفة المحتاجة للدعم</p>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs bg-slate-900 p-1.5 rounded-xl border border-slate-700">
-                <span className="text-slate-400 font-bold px-2">ترتيب حسب:</span>
-                <button
-                  onClick={() => setAnalyticsSortBy('highestPct')}
-                  className={`px-3 py-1.5 rounded-lg font-bold ${analyticsSortBy === 'highestPct' ? 'bg-teal-500 text-slate-950' : 'text-slate-300'}`}
-                >
-                  الأعلى إنجازاً (%)
-                </button>
-                <button
-                  onClick={() => setAnalyticsSortBy('highestSales')}
-                  className={`px-3 py-1.5 rounded-lg font-bold ${analyticsSortBy === 'highestSales' ? 'bg-teal-500 text-slate-950' : 'text-slate-300'}`}
-                >
-                  الأعلى مبيعات
-                </button>
-                <button
-                  onClick={() => setAnalyticsSortBy('lowestPct')}
-                  className={`px-3 py-1.5 rounded-lg font-bold ${analyticsSortBy === 'lowestPct' ? 'bg-rose-500 text-white' : 'text-rose-300'}`}
-                >
-                  المجموعات الضعيفة 🔥
-                </button>
               </div>
             </div>
 
@@ -1045,109 +1100,13 @@ function App() {
         )}
       </main>
 
-      {/* نافذة مقارنة المقترح للمدير العام (Diff Viewer) */}
-      {showProposalDiffModal && parsedProposal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-800 border border-purple-500/50 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <i className="fa-solid fa-code-compare text-purple-400"></i> مقارنة مقترح المشرف مع القواعد الحالية
-              </h3>
-              <button onClick={() => setShowProposalDiffModal(false)} className="text-slate-400 hover:text-white">
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
-
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              <div className="grid grid-cols-3 gap-3 text-xs text-center font-mono">
-                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                  <span className="text-slate-400 block mb-1">شرط الهدف العام</span>
-                  <div className="flex justify-center items-center gap-2">
-                    <span className="text-slate-400 line-through">{generalRules.generalThresholdPct}%</span>
-                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
-                    <span className="text-emerald-400 font-bold text-sm">{parsedProposal.generalRules?.generalThresholdPct}%</span>
-                  </div>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                  <span className="text-slate-400 block mb-1">عمولة الهدف العام</span>
-                  <div className="flex justify-center items-center gap-2">
-                    <span className="text-slate-400 line-through">{generalRules.generalTargetCommValue}</span>
-                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
-                    <span className="text-amber-300 font-bold text-sm">{parsedProposal.generalRules?.generalTargetCommValue} ر.س</span>
-                  </div>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                  <span className="text-slate-400 block mb-1">أدنى عدد مجموعات</span>
-                  <div className="flex justify-center items-center gap-2">
-                    <span className="text-slate-400 line-through">{generalRules.minGroupsRequired}</span>
-                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
-                    <span className="text-teal-300 font-bold text-sm">{parsedProposal.generalRules?.minGroupsRequired}</span>
-                  </div>
-                </div>
-              </div>
-
-              {parsedProposal.repsTargets && (
-                <div className="border border-slate-700 rounded-xl overflow-hidden">
-                  <table className="w-full text-xs text-right bg-slate-900">
-                    <thead className="bg-slate-950 text-slate-400 font-bold">
-                      <tr>
-                        <th className="p-2.5">المندوب</th>
-                        <th className="p-2.5">الهدف الحالي</th>
-                        <th className="p-2.5">الهدف المقترح</th>
-                        <th className="p-2.5">الفارق</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 font-mono">
-                      {parsedProposal.repsTargets.map((rt) => {
-                        const currentRepData = repsData.find(r => Number(r.id) === Number(rt.id));
-                        const currentT = currentRepData ? currentRepData.generalTarget : 0;
-                        const diff = rt.generalTarget - currentT;
-                        return (
-                          <tr key={rt.id}>
-                            <td className="p-2.5 font-sans font-bold text-white">{rt.name}</td>
-                            <td className="p-2.5">{formatNum(currentT)}</td>
-                            <td className="p-2.5 font-bold text-purple-300">{formatNum(rt.generalTarget)}</td>
-                            <td className={`p-2.5 font-bold ${diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
-                              {diff > 0 ? `+${formatNum(diff)}` : formatNum(diff)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center pt-3 border-t border-slate-700">
-              <span className="text-xs text-slate-400">مقدم المقترح: <b className="text-white">{activeProposalInfo.submittedBy}</b></span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowProposalDiffModal(false)}
-                  className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-xl text-xs"
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={handleAdoptProposal}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
-                >
-                  <i className="fa-solid fa-check"></i>
-                  <span>اعتماد وتطبيق هذا المقترح</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* نافذة تفاصيل المندوب */}
       {selectedRep && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4">
             <div className="flex justify-between items-center border-b border-slate-700 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <i className="fa-solid fa-user-check text-emerald-400"></i> تفاصيل أداء المندوب: {selectedRep.name}
+                <i className="fa-solid fa-user-check text-emerald-400"></i> تفاصيل أداء وبوابات المندوب: {selectedRep.name}
               </h3>
               <button onClick={() => setSelectedRep(null)} className="text-slate-400 hover:text-white">
                 <i className="fa-solid fa-xmark text-lg"></i>
@@ -1159,6 +1118,7 @@ function App() {
                 <thead className="bg-slate-900 text-slate-400 sticky top-0">
                   <tr>
                     <th className="p-2.5">المجموعة</th>
+                    <th className="p-2.5">النوع</th>
                     <th className="p-2.5">الهدف</th>
                     <th className="p-2.5">المبيعات</th>
                     <th className="p-2.5">النسبة</th>
@@ -1171,6 +1131,9 @@ function App() {
                   {(selectedRep.detailedGroups || []).map((grp, idx) => (
                     <tr key={idx} className={grp.isQualified ? 'bg-emerald-950/20' : ''}>
                       <td className="p-2.5 font-sans font-bold text-white">{grp.name}</td>
+                      <td className="p-2.5 font-sans">
+                        {grp.isMandatory ? <span className="text-purple-300 font-bold">إلزامية ⭐</span> : <span className="text-slate-500">اختيارية</span>}
+                      </td>
                       <td className="p-2.5">{formatNum(grp.target)}</td>
                       <td className="p-2.5 font-bold text-emerald-400">{formatNum(grp.sales)}</td>
                       <td className="p-2.5">{grp.grpPct.toFixed(1)}%</td>
@@ -1184,7 +1147,7 @@ function App() {
                       <td className="p-2.5 text-center font-sans">
                         {grp.isQualified ? <span className="text-emerald-400 font-bold">محققة</span> : <span className="text-slate-500">غير محققة</span>}
                       </td>
-                      <td className="p-2.5 text-teal-300 font-bold">{formatNum(selectedRep.isEligibleForSalesCommissions ? grp.potentialComm : 0)} ر.س</td>
+                      <td className="p-2.5 text-teal-300 font-bold">{formatNum(grp.commEarned)} ر.س</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1222,25 +1185,6 @@ function App() {
                 <span className="font-bold text-emerald-400 font-mono text-sm">
                   {monthStatus === 'approved' ? 'معتمد ومقفل نهائياً 🔒' : 'قيد المراجعة والتعديل ✍️'}
                 </span>
-              </div>
-
-              <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">مقدم المقترح:</span>
-                  <span className="font-bold text-white">{activeProposalInfo ? activeProposalInfo.submittedBy : 'المشرف'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">وقت الرفع:</span>
-                  <span className="font-mono text-slate-300">{activeProposalInfo ? activeProposalInfo.submissionDate : '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">المدير المعتمد:</span>
-                  <span className="font-bold text-emerald-300">{activeProposalInfo && activeProposalInfo.approvedBy ? activeProposalInfo.approvedBy : 'بانتظار الاعتماد'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">تاريخ الاعتماد:</span>
-                  <span className="font-mono text-slate-300">{activeProposalInfo && activeProposalInfo.approvalDate ? activeProposalInfo.approvalDate : '-'}</span>
-                </div>
               </div>
             </div>
 
