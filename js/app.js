@@ -15,7 +15,7 @@ function App() {
   const [monthKey, setMonthKey] = useState('2026-08');
   const [monthStatus, setMonthStatus] = useState('open');
   const [activeProposalInfo, setActiveProposalInfo] = useState(null);
-  const [activeTab, setActiveTab] = useState('config'); // يبدأ من العقل المدبر
+  const [activeTab, setActiveTab] = useState('summary');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRep, setSelectedRep] = useState(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -27,7 +27,6 @@ function App() {
   const [expandedGroupIdx, setExpandedGroupIdx] = useState(null);
   const [selectedRepToAdd, setSelectedRepToAdd] = useState({});
 
-  // 1. القواعد الرسمية المعتمدة (العقل المدبر)
   const [generalRules, setGeneralRules] = useState({
     isGenTargetMandatory: true,
     generalThresholdPct: 80,
@@ -35,9 +34,9 @@ function App() {
     minGroupsRequired: 7,
     collectionRules: {
       isCollMandatory: false,
-      thresholdPct: 60,
+      thresholdPct: 0,
       commType: 'fixed',
-      commValue: 500
+      commValue: 0
     }
   });
 
@@ -47,7 +46,6 @@ function App() {
 
   const [repsData, setRepsData] = useState([]);
 
-  // 2. المطبخ التجريبي (Sandbox)
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(null);
   const [kitchenGroupRules, setKitchenGroupRules] = useState(null);
   const [kitchenRepsData, setKitchenRepsData] = useState(null);
@@ -94,9 +92,9 @@ function App() {
             minGroupsRequired: data.generalRules.minGroupsRequired ?? 7,
             collectionRules: data.generalRules.collectionRules || {
               isCollMandatory: false,
-              thresholdPct: 60,
+              thresholdPct: 0,
               commType: 'fixed',
-              commValue: 500
+              commValue: 0
             }
           };
           setGeneralRules(mergedRules);
@@ -105,7 +103,6 @@ function App() {
         if (data.groupRules && data.groupRules.length > 0) {
           const formattedGroups = data.groupRules.map(g => ({
             ...g,
-            codes: Array.isArray(g.codes) ? g.codes : String(g.codes || '').split(',').map(c => c.trim()).filter(Boolean),
             isActive: g.isActive !== false,
             isMandatory: g.isMandatory === true
           }));
@@ -219,14 +216,6 @@ function App() {
     setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
   };
 
-  // تعديل الأكواد المدمجة للمجموعة
-  const updateGroupCodes = (gIdx, codesStr) => {
-    const updated = [...groupRules];
-    updated[gIdx] = { ...updated[gIdx], codes: codesStr.split(',').map(c => c.trim()).filter(Boolean) };
-    setGroupRules(updated);
-  };
-
-  // دوال تخصيص المطبخ
   const updateKitchenGroupRule = (gIdx, field, val) => {
     const updated = JSON.parse(JSON.stringify(kitchenGroupRules || groupRules));
     updated[gIdx] = { ...updated[gIdx], [field]: val === '' ? '' : (field === 'thresholdPct' || field === 'commValue' ? Number(val) : val) };
@@ -279,7 +268,7 @@ function App() {
       const newGrp = {
         id: (kitchenGroupRules || groupRules).length,
         name: name.trim(),
-        codes: [],
+        code: String(Date.now()).slice(-4),
         thresholdPct: 70,
         commType: 'fixed',
         commValue: 250,
@@ -470,10 +459,10 @@ function App() {
         {currentUser.role !== 'rep' && (
           <div className="flex space-x-2 space-x-reverse mt-3 border-t border-slate-700/60 pt-2 overflow-x-auto">
             <button
-              onClick={() => setActiveTab('config')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${activeTab === 'config' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-300'}`}
+              onClick={() => setActiveTab('summary')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${activeTab === 'summary' ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-300'}`}
             >
-              <i className="fa-solid fa-sliders"></i> إعدادات البوابات والتحصيل (العقل المدبر) 🔒
+              <i className="fa-solid fa-table-list"></i> خلاصة المندوبين وبوابات الاستحقاق
             </button>
             <button
               onClick={() => setActiveTab('kitchen')}
@@ -482,10 +471,10 @@ function App() {
               <i className="fa-solid fa-kitchen-set text-amber-300"></i> المطبخ الرئيسي لتخطيط الأهداف والعمولات 🧠
             </button>
             <button
-              onClick={() => setActiveTab('summary')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${activeTab === 'summary' ? 'bg-emerald-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-300'}`}
+              onClick={() => setActiveTab('config')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${activeTab === 'config' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-slate-900 text-slate-300'}`}
             >
-              <i className="fa-solid fa-table-list"></i> خلاصة المندوبين وبوابات الاستحقاق
+              <i className="fa-solid fa-sliders"></i> إعدادات البوابات والتحصيل (العقل المدبر) 🔒
             </button>
             <button
               onClick={() => setActiveTab('analytics')}
@@ -530,8 +519,8 @@ function App() {
             </div>
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">عمولة التحصيل</span>
-              <span className="text-base font-extrabold text-blue-300">{formatNum(companyTotals.collComm)} ر.س</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">({companyTotals.overallCollPct.toFixed(1)}% من الدين)</span>
+              <span className="text-base font-extrabold text-blue-300">0 ر.س</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">معزولة حالياً</span>
             </div>
             <div className="bg-slate-800 border border-emerald-500/40 bg-emerald-950/20 p-3.5 rounded-2xl">
               <span className="text-emerald-300 text-xs font-bold mb-1 font-sans">إجمالي العمولات المستحقة</span>
@@ -540,240 +529,120 @@ function App() {
           </div>
         )}
 
-        {/* TAB 1: إعدادات البوابات والتحصيل والدمج (العقل المدبر) */}
-        {activeTab === 'config' && currentUser.role !== 'rep' && (
-          <div className="space-y-6">
-            <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
-                <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <i className="fa-solid fa-sliders text-amber-400"></i> إدارة بوابات الاستحقاق وشروط العمولات والدمج الرسمي
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في الأكواد المدمجة والشروط والنسب والعمولات (الحساب لحظي ومباشر)</p>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {currentUser.role === 'manager' && activeProposalInfo && (
-                    <button
-                      onClick={() => setShowProposalDiffModal(true)}
-                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md"
-                    >
-                      <i className="fa-solid fa-code-compare text-amber-300"></i>
-                      <span>مقارنة مقترح المشرف 🔍</span>
-                    </button>
-                  )}
-                  {currentUser.role === 'manager' && monthStatus !== 'approved' && (
-                    <button
-                      onClick={handleSaveOfficialConfig}
-                      disabled={syncLoading}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
-                    >
-                      <i className="fa-solid fa-floppy-disk text-amber-300"></i>
-                      <span>حفظ وتثبيت الشروط للشهر</span>
-                    </button>
-                  )}
-                </div>
+        {/* TAB 1: خلاصة المندوبين */}
+        {activeTab === 'summary' && currentUser.role !== 'rep' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+              <div className="relative max-w-md w-full">
+                <i className="fa-solid fa-magnifying-glass absolute right-3.5 top-3 text-slate-400 text-sm"></i>
+                <input
+                  type="text"
+                  placeholder="ابحث باسم المندوب أو الرقم..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
               </div>
 
-              {/* بوابة الهدف العام */}
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                    checked={generalRules.isGenTargetMandatory !== false}
-                    onChange={(e) => setGeneralRules({ ...generalRules, isGenTargetMandatory: e.target.checked })}
-                    className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
-                  />
-                  <span className="font-bold text-white text-sm">تفعيل بوابة الهدف العام كشرط إلزامي أساسي لدخول عمولات المجموعات</span>
-                </div>
+              {currentUser.role === 'manager' && monthStatus !== 'approved' && (
+                <button
+                  onClick={handleSaveOfficialConfig}
+                  disabled={syncLoading}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+                >
+                  <i className="fa-solid fa-floppy-disk text-amber-300"></i>
+                  <span>حفظ وتثبيت الأهداف والعمولات 💾</span>
+                </button>
+              )}
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-2">
-                  <div>
-                    <label className="text-slate-400 block mb-1">نسبة شرط الهدف العام (%)</label>
-                    <input
-                      type="number"
-                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.generalThresholdPct ?? 80}
-                      onChange={(e) => setGeneralRules({ ...generalRules, generalThresholdPct: e.target.value === '' ? '' : Number(e.target.value) })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-emerald-400 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">قيمة عمولة الهدف العام (ر.س - افتراضي 0)</label>
-                    <input
-                      type="number"
-                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.generalTargetCommValue ?? 0}
-                      onChange={(e) => setGeneralRules({ ...generalRules, generalTargetCommValue: e.target.value === '' ? '' : Number(e.target.value) })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-amber-300 font-bold font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">أدنى عدد مجموعات مطلوبة للعمولة</label>
-                    <input
-                      type="number"
-                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.minGroupsRequired ?? 7}
-                      onChange={(e) => setGeneralRules({ ...generalRules, minGroupsRequired: e.target.value === '' ? '' : Number(e.target.value) })}
-                      className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-teal-300 font-bold"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* جدول المجموعات وأكواد الجمع الديناميكية */}
-              <div className="space-y-3 pt-2">
-                <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
-                  <i className="fa-solid fa-boxes-stacked"></i> شروط المجموعات وتحديد الأكواد المدمجة (تعديل الأكواد والعمولات مباشرة):
-                </h3>
-                <div className="overflow-x-auto border border-slate-700 rounded-xl">
-                  <table className="w-full text-xs text-right bg-slate-900">
-                    <thead className="bg-slate-950 text-slate-300 border-b border-slate-700">
-                      <tr>
-                        <th className="p-3 text-center">تفعيل ✅</th>
-                        <th className="p-3 text-center">أساسية ⭐</th>
-                        <th className="p-3">#</th>
-                        <th className="p-3">اسم المجموعة</th>
-                        <th className="p-3 text-amber-300 font-mono">أكواد الجمع المدمجة (Category Codes)</th>
-                        <th className="p-3">نسبة الشرط (%)</th>
-                        <th className="p-3">نوع العمولة</th>
-                        <th className="p-3">قيمة العمولة (ر.س)</th>
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-right text-slate-200">
+                  <thead className="bg-slate-900 text-slate-300 uppercase text-[11px] font-extrabold border-b border-slate-700">
+                    <tr>
+                      <th className="py-3.5 px-3 text-center">تفعيل ✅</th>
+                      <th className="py-3.5 px-3">#</th>
+                      <th className="py-3.5 px-3">اسم المندوب</th>
+                      <th className="py-3.5 px-3">الهدف العام</th>
+                      <th className="py-3.5 px-3">المبيعات</th>
+                      <th className="py-3.5 px-3">نسبة الإنجاز</th>
+                      <th className="py-3.5 px-3 text-center">المجموعات المؤهلة (≥70%)</th>
+                      <th className="py-3.5 px-3 text-teal-300 font-bold">عمولة المجموعات</th>
+                      <th className="py-3.5 px-3">التحصيل الصافي</th>
+                      <th className="py-3.5 px-3 text-blue-300">عمولة التحصيل</th>
+                      <th className="py-3.5 px-3 text-emerald-300 font-black">إجمالي المستحق</th>
+                      <th className="py-3.5 px-3">حالة البوابات والشروط</th>
+                      <th className="py-3.5 px-3 text-center">تفاصيل</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/60 font-mono">
+                    {visibleReps.map((rep) => (
+                      <tr key={rep.id} className={`hover:bg-slate-700/40 ${!rep.isActive ? 'opacity-35 bg-slate-950/60' : ''}`}>
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={rep.isActive !== false}
+                            onChange={() => toggleRepActive(rep.id)}
+                            className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-3 text-slate-400">{rep.id}</td>
+                        <td className="py-3 px-3 font-sans font-bold text-white">{rep.name}</td>
+                        <td className="py-3 px-3">
+                          <input
+                            type="number"
+                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                            value={rep.generalTarget}
+                            onChange={(e) => updateOfficialRepTarget(rep.id, e.target.value)}
+                            className="w-24 bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold disabled:opacity-70"
+                          />
+                        </td>
+                        <td className="py-3 px-3 font-bold text-white">{formatNum(rep.genSales)}</td>
+                        <td className="py-3 px-3">
+                          <span className={`font-bold ${rep.passGate_GenTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {rep.genPct.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            rep.isGroupsGateQualified ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-950 text-rose-300'
+                          }`}>
+                            {rep.qualifiedGroupsCount} / {rep.assignedGroupsCount || 14}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-teal-300 font-bold text-sm">{formatNum(rep.totalGroupCommissionEarned)} ر.س</td>
+                        <td className="py-3 px-3">
+                          <div>{formatNum(rep.collection)}</div>
+                          <span className="text-[10px] text-slate-400 block font-sans">({rep.debt > 0 ? ((rep.collection / rep.debt) * 100).toFixed(1) : 0}%)</span>
+                        </td>
+                        <td className="py-3 px-3 text-blue-300 font-bold">0 ر.س</td>
+                        <td className="py-3 px-3 bg-emerald-950/30 font-black text-emerald-400 text-sm">
+                          {formatNum(rep.grandTotalCommission)} ر.س
+                        </td>
+                        <td className="py-3 px-3 font-sans text-[11px]">
+                          <span className={rep.isGroupsGateQualified ? 'text-emerald-400 font-bold' : 'text-rose-300'}>
+                            {rep.eligibilityStatusText}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <button
+                            onClick={() => setSelectedRep(rep)}
+                            className="bg-slate-700 hover:bg-emerald-600 hover:text-slate-950 text-slate-200 px-3 py-1 rounded-lg text-xs font-bold"
+                          >
+                            التفاصيل
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 font-mono">
-                      {groupRules.map((grpRule, idx) => (
-                        <tr key={idx} className={`hover:bg-slate-800/60 ${!grpRule.isActive ? 'opacity-40 bg-slate-950/40' : ''}`}>
-                          <td className="p-3 text-center">
-                            <input
-                              type="checkbox"
-                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                              checked={grpRule.isActive !== false}
-                              onChange={(e) => {
-                                const updated = [...groupRules];
-                                updated[idx] = { ...updated[idx], isActive: e.target.checked };
-                                setGroupRules(updated);
-                              }}
-                              className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
-                            />
-                          </td>
-                          <td className="p-3 text-center">
-                            <input
-                              type="checkbox"
-                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
-                              checked={grpRule.isMandatory === true}
-                              onChange={(e) => {
-                                const updated = [...groupRules];
-                                updated[idx] = { ...updated[idx], isMandatory: e.target.checked };
-                                setGroupRules(updated);
-                              }}
-                              className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
-                            />
-                          </td>
-                          <td className="p-3 text-slate-500 font-sans">{idx + 1}</td>
-                          <td className="p-3 font-sans font-bold text-white text-sm">{grpRule.name}</td>
-                          <td className="p-3">
-                            <input
-                              type="text"
-                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                              value={Array.isArray(grpRule.codes) ? grpRule.codes.join(', ') : (grpRule.codes || '')}
-                              onChange={(e) => updateGroupCodes(idx, e.target.value)}
-                              placeholder="مثال: 2010, 12020"
-                              className="w-48 bg-slate-950 border border-amber-500/40 rounded p-1.5 text-center text-amber-300 font-bold"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <input
-                              type="number"
-                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
-                              value={grpRule.thresholdPct ?? 70}
-                              onChange={(e) => {
-                                const updated = [...groupRules];
-                                updated[idx] = { ...updated[idx], thresholdPct: e.target.value === '' ? '' : Number(e.target.value) };
-                                setGroupRules(updated);
-                              }}
-                              className="w-16 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-teal-300 font-bold"
-                            />
-                          </td>
-                          <td className="p-3 font-sans">
-                            <select
-                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
-                              value={grpRule.commType || 'fixed'}
-                              onChange={(e) => {
-                                const updated = [...groupRules];
-                                updated[idx] = { ...updated[idx], commType: e.target.value };
-                                setGroupRules(updated);
-                              }}
-                              className="bg-slate-800 border border-slate-700 text-slate-200 rounded p-1.5 text-xs"
-                            >
-                              <option value="fixed">مبلغ ثابت (ر.س)</option>
-                              <option value="percent">نسبة (% من المبيعات)</option>
-                            </select>
-                          </td>
-                          <td className="p-3">
-                            <input
-                              type="number"
-                              disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
-                              value={grpRule.commValue}
-                              onChange={(e) => {
-                                const updated = [...groupRules];
-                                updated[idx] = { ...updated[idx], commValue: e.target.value === '' ? '' : Number(e.target.value) };
-                                setGroupRules(updated);
-                              }}
-                              className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* التحصيل */}
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
-                <h3 className="text-xs font-bold text-blue-300">شروط وعمولة التحصيل الإجمالي (صافي بعد استبعاد المتعثرات):</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
-                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block mb-1 font-sans">شرط نسبة التحصيل الصافي (%)</span>
-                    <input
-                      type="number"
-                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.collectionRules?.thresholdPct ?? 60}
-                      onChange={(e) => {
-                        setGeneralRules({
-                          ...generalRules,
-                          collectionRules: { ...generalRules.collectionRules, thresholdPct: Number(e.target.value) }
-                        });
-                      }}
-                      className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-blue-300 font-bold"
-                    />
-                  </div>
-                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block mb-1 font-sans">قيمة عمولة التحصيل (مبلغ ثابت ر.س)</span>
-                    <input
-                      type="number"
-                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.collectionRules?.commValue ?? 500}
-                      onChange={(e) => {
-                        setGeneralRules({
-                          ...generalRules,
-                          collectionRules: { ...generalRules.collectionRules, commValue: Number(e.target.value) }
-                        });
-                      }}
-                      className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
-                    />
-                  </div>
-                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-center font-sans text-slate-300">
-                    <span>عمولة ثابتة 500 ر.س عند تحقيق $\ge 60\%$</span>
-                  </div>
-                </div>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 2: المطبخ الرئيسي لتخطيط الأهداف والعمولات */}
+        {/* TAB 2: المطبخ الرئيسي */}
         {activeTab === 'kitchen' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-3xl border border-purple-500/40 shadow-2xl space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
@@ -782,7 +651,7 @@ function App() {
                   <i className="fa-solid fa-kitchen-set text-purple-400"></i> المطبخ الرئيسي لتخطيط الأهداف والعمولات / الحوافز
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  تحكم دقيق بالأصناف وتفكيك الأهداف وتخصيص العمولات الفردية مع المزامنة اللحظية.
+                  تحكم دقيق بالأصناف الاستراتيجية وتفكيك الأهداف وتخصيص العمولات الفردية مع المزامنة اللحظية.
                 </p>
               </div>
 
@@ -989,109 +858,178 @@ function App() {
           </div>
         )}
 
-        {/* TAB 3: خلاصة المندوبين */}
-        {activeTab === 'summary' && currentUser.role !== 'rep' && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-              <div className="relative max-w-md w-full">
-                <i className="fa-solid fa-magnifying-glass absolute right-3.5 top-3 text-slate-400 text-sm"></i>
-                <input
-                  type="text"
-                  placeholder="ابحث باسم المندوب أو الرقم..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-                />
+        {/* TAB 3: إعدادات البوابات (العقل المدبر) */}
+        {activeTab === 'config' && currentUser.role !== 'rep' && (
+          <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <i className="fa-solid fa-sliders text-amber-400"></i> إدارة بوابات الاستحقاق وشروط العمولات الرسمية
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في شروط التأهل ونسب المجموعات (الحساب لحظي ومباشر)</p>
               </div>
-
-              {currentUser.role === 'manager' && monthStatus !== 'approved' && (
-                <button
-                  onClick={handleSaveOfficialConfig}
-                  disabled={syncLoading}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
-                >
-                  <i className="fa-solid fa-floppy-disk text-amber-300"></i>
-                  <span>حفظ وتثبيت الأهداف والعمولات 💾</span>
-                </button>
-              )}
+              
+              <div className="flex items-center gap-2">
+                {currentUser.role === 'manager' && activeProposalInfo && (
+                  <button
+                    onClick={() => setShowProposalDiffModal(true)}
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md"
+                  >
+                    <i className="fa-solid fa-code-compare text-amber-300"></i>
+                    <span>مقارنة مقترح المشرف 🔍</span>
+                  </button>
+                )}
+                {currentUser.role === 'manager' && monthStatus !== 'approved' && (
+                  <button
+                    onClick={handleSaveOfficialConfig}
+                    disabled={syncLoading}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                  >
+                    <i className="fa-solid fa-floppy-disk text-amber-300"></i>
+                    <span>حفظ وتثبيت الشروط للشهر</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-right text-slate-200">
-                  <thead className="bg-slate-900 text-slate-300 uppercase text-[11px] font-extrabold border-b border-slate-700">
+            {/* بوابة الهدف العام */}
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                  checked={generalRules.isGenTargetMandatory !== false}
+                  onChange={(e) => setGeneralRules({ ...generalRules, isGenTargetMandatory: e.target.checked })}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                />
+                <span className="font-bold text-white text-sm">تفعيل بوابة الهدف العام كشرط إلزامي أساسي لدخول عمولات المجموعات</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-2">
+                <div>
+                  <label className="text-slate-400 block mb-1">نسبة شرط الهدف العام (%)</label>
+                  <input
+                    type="number"
+                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                    value={generalRules.generalThresholdPct ?? 80}
+                    onChange={(e) => setGeneralRules({ ...generalRules, generalThresholdPct: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-emerald-400 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">قيمة عمولة الهدف العام (ر.س - افتراضي 0)</label>
+                  <input
+                    type="number"
+                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                    value={generalRules.generalTargetCommValue ?? 0}
+                    onChange={(e) => setGeneralRules({ ...generalRules, generalTargetCommValue: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-amber-300 font-bold font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">أدنى عدد مجموعات مطلوبة للعمولة</label>
+                  <input
+                    type="number"
+                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                    value={generalRules.minGroupsRequired ?? 7}
+                    onChange={(e) => setGeneralRules({ ...generalRules, minGroupsRequired: e.target.value === '' ? '' : Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-center text-teal-300 font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* جدول المجموعات الـ 14 */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
+                <i className="fa-solid fa-boxes-stacked"></i> شروط المجموعات الـ 14 (تحديد المجموعات الإلزامية الأساسية ⭐):
+              </h3>
+              <div className="overflow-x-auto border border-slate-700 rounded-xl">
+                <table className="w-full text-xs text-right bg-slate-900">
+                  <thead className="bg-slate-950 text-slate-300 border-b border-slate-700">
                     <tr>
-                      <th className="py-3.5 px-3 text-center">تفعيل ✅</th>
-                      <th className="py-3.5 px-3">#</th>
-                      <th className="py-3.5 px-3">اسم المندوب</th>
-                      <th className="py-3.5 px-3">الهدف العام</th>
-                      <th className="py-3.5 px-3">المبيعات</th>
-                      <th className="py-3.5 px-3">نسبة الإنجاز</th>
-                      <th className="py-3.5 px-3 text-center">المجموعات المؤهلة (≥70%)</th>
-                      <th className="py-3.5 px-3 text-teal-300 font-bold">عمولة المجموعات</th>
-                      <th className="py-3.5 px-3">التحصيل الصافي</th>
-                      <th className="py-3.5 px-3 text-blue-300">عمولة التحصيل</th>
-                      <th className="py-3.5 px-3 text-emerald-300 font-black">إجمالي المستحق</th>
-                      <th className="py-3.5 px-3">حالة البوابات والشروط</th>
-                      <th className="py-3.5 px-3 text-center">تفاصيل</th>
+                      <th className="p-3 text-center">تفعيل ✅</th>
+                      <th className="p-3 text-center">مجموعة إلزامية أساسية ⭐</th>
+                      <th className="p-3">#</th>
+                      <th className="p-3">اسم المجموعة</th>
+                      <th className="p-3">كود الجمع</th>
+                      <th className="p-3">نسبة الشرط (%)</th>
+                      <th className="p-3">نوع العمولة</th>
+                      <th className="p-3">قيمة العمولة (ر.س)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700/60 font-mono">
-                    {visibleReps.map((rep) => (
-                      <tr key={rep.id} className={`hover:bg-slate-700/40 ${!rep.isActive ? 'opacity-35 bg-slate-950/60' : ''}`}>
-                        <td className="py-3 px-3 text-center">
+                  <tbody className="divide-y divide-slate-800 font-mono">
+                    {groupRules.map((grpRule, idx) => (
+                      <tr key={idx} className={`hover:bg-slate-800/60 ${!grpRule.isActive ? 'opacity-40 bg-slate-950/40' : ''}`}>
+                        <td className="p-3 text-center">
                           <input
                             type="checkbox"
-                            checked={rep.isActive !== false}
-                            onChange={() => toggleRepActive(rep.id)}
+                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                            checked={grpRule.isActive !== false}
+                            onChange={(e) => {
+                              const updated = [...groupRules];
+                              updated[idx] = { ...updated[idx], isActive: e.target.checked };
+                              setGroupRules(updated);
+                            }}
                             className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
                           />
                         </td>
-                        <td className="py-3 px-3 text-slate-400">{rep.id}</td>
-                        <td className="py-3 px-3 font-sans font-bold text-white">{rep.name}</td>
-                        <td className="py-3 px-3">
+                        <td className="p-3 text-center">
                           <input
-                            type="number"
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                            value={rep.generalTarget}
-                            onChange={(e) => updateOfficialRepTarget(rep.id, e.target.value)}
-                            className="w-24 bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold disabled:opacity-70"
+                            type="checkbox"
+                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
+                            checked={grpRule.isMandatory === true}
+                            onChange={(e) => {
+                              const updated = [...groupRules];
+                              updated[idx] = { ...updated[idx], isMandatory: e.target.checked };
+                              setGroupRules(updated);
+                            }}
+                            className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
                           />
                         </td>
-                        <td className="py-3 px-3 font-bold text-white">{formatNum(rep.genSales)}</td>
-                        <td className="py-3 px-3">
-                          <span className={`font-bold ${rep.passGate_GenTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {rep.genPct.toFixed(1)}%
-                          </span>
+                        <td className="p-3 text-slate-500 font-sans">{idx + 1}</td>
+                        <td className="p-3 font-sans font-bold text-white text-sm">{grpRule.name}</td>
+                        <td className="p-3 text-amber-300 font-bold">{grpRule.code}</td>
+                        <td className="p-3">
+                          <input
+                            type="number"
+                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
+                            value={grpRule.thresholdPct ?? 70}
+                            onChange={(e) => {
+                              const updated = [...groupRules];
+                              updated[idx] = { ...updated[idx], thresholdPct: e.target.value === '' ? '' : Number(e.target.value) };
+                              setGroupRules(updated);
+                            }}
+                            className="w-16 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-teal-300 font-bold"
+                          />
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            rep.isGroupsGateQualified ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-950 text-rose-300'
-                          }`}>
-                            {rep.qualifiedGroupsCount} / {rep.assignedGroupsCount || 14}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-teal-300 font-bold text-sm">{formatNum(rep.totalGroupCommissionEarned)} ر.س</td>
-                        <td className="py-3 px-3">
-                          <div>{formatNum(rep.collection)}</div>
-                          <span className="text-[10px] text-slate-400 block font-sans">({rep.debt > 0 ? ((rep.collection / rep.debt) * 100).toFixed(1) : 0}%)</span>
-                        </td>
-                        <td className="py-3 px-3 text-blue-300 font-bold">{formatNum(rep.collectionCommission)}</td>
-                        <td className="py-3 px-3 bg-emerald-950/30 font-black text-emerald-400 text-sm">
-                          {formatNum(rep.grandTotalCommission)} ر.س
-                        </td>
-                        <td className="py-3 px-3 font-sans text-[11px]">
-                          <span className={rep.isGroupsGateQualified ? 'text-emerald-400 font-bold' : 'text-rose-300'}>
-                            {rep.eligibilityStatusText}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <button
-                            onClick={() => setSelectedRep(rep)}
-                            className="bg-slate-700 hover:bg-emerald-600 hover:text-slate-950 text-slate-200 px-3 py-1 rounded-lg text-xs font-bold"
+                        <td className="p-3 font-sans">
+                          <select
+                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
+                            value={grpRule.commType || 'fixed'}
+                            onChange={(e) => {
+                              const updated = [...groupRules];
+                              updated[idx] = { ...updated[idx], commType: e.target.value };
+                              setGroupRules(updated);
+                            }}
+                            className="bg-slate-800 border border-slate-700 text-slate-200 rounded p-1.5 text-xs"
                           >
-                            التفاصيل
-                          </button>
+                            <option value="fixed">مبلغ ثابت (ر.س)</option>
+                            <option value="percent">نسبة (% من المبيعات)</option>
+                          </select>
+                        </td>
+                        <td className="p-3">
+                          <input
+                            type="number"
+                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
+                            value={grpRule.commValue}
+                            onChange={(e) => {
+                              const updated = [...groupRules];
+                              updated[idx] = { ...updated[idx], commValue: e.target.value === '' ? '' : Number(e.target.value) };
+                              setGroupRules(updated);
+                            }}
+                            className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
+                          />
                         </td>
                       </tr>
                     ))}
