@@ -1,19 +1,34 @@
+/**
+ * طبقة استدعاء البيانات والـ API
+ */
+
 const ApiService = {
   async fetchWorkspace(role, userId, monthKey) {
-    const endpoint = role === 'rep'
-      ? `${CONFIG.API_URL}?action=getRepDashboard&userId=${userId}&monthKey=${monthKey}`
-      : `${CONFIG.API_URL}?action=getSupervisorWorkspace&monthKey=${monthKey}`;
-    const res = await fetch(endpoint);
+    const url = `${CONFIG.API_URL}?action=${role === 'rep' ? 'getRepDashboard' : 'getSupervisorWorkspace'}&userId=${userId}&monthKey=${monthKey}`;
+    const res = await fetch(url);
     return await res.json();
   },
 
-  async saveProposal(monthKey, customRules, userContext) {
+  async saveProposal(monthKey, proposalData, userContext) {
     const res = await fetch(CONFIG.API_URL, {
       method: 'POST',
       body: JSON.stringify({
-        action: 'saveProposal',
+        action: 'saveSupervisorProposal',
         monthKey,
-        customRules,
+        ...proposalData,
+        userContext
+      })
+    });
+    return await res.json();
+  },
+
+  async saveOfficialConfig(monthKey, officialData, userContext) {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'saveOfficialConfig',
+        monthKey,
+        ...officialData,
         userContext
       })
     });
