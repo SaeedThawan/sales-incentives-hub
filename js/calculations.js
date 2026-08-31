@@ -1,5 +1,5 @@
 /**
- * محرك احتساب الأداء وبوابات الاستحقاق والمؤشرات المالية v12.0 Master
+ * محرك احتساب الأداء وبوابات الاستحقاق والمؤشرات المالية v14.0 Dynamic
  */
 
 const CalcEngine = {
@@ -20,7 +20,7 @@ const CalcEngine = {
     const passGate_GenTarget = genTarget > 0 ? (genPct >= genThresholdPct) : false;
     const remainingGenSales = genTarget > 0 ? Math.max(0, (genTarget * (genThresholdPct / 100)) - genSales) : 0;
 
-    // 2. تقييم المجموعات المكلف بها فقط (تجاهل المجموعات ذات الهدف 0)
+    // 2. تقييم المجموعات المكلف بها فقط (الهدف > 0)
     let assignedGroupsCount = 0;
     let qualifiedGroupsCount = 0;
     let failedMandatoryGroups = [];
@@ -91,29 +91,29 @@ const CalcEngine = {
     const passGate_MinGroupsCount = qualifiedGroupsCount >= minGroupsReq;
     const passGate_MandatoryGroups = failedMandatoryGroups.length === 0;
 
-    // 3. التحصيل الصافي
+    // 3. التحصيل
     const collRules = gRules.collectionRules || {
       isCollMandatory: false,
-      thresholdPct: 30,
-      commType: 'percent',
-      commValue: 0.5
+      thresholdPct: 60,
+      commType: 'fixed',
+      commValue: 500
     };
 
     const debt = Number(rep.debt) || 0;
     const collection = Number(rep.collection) || 0;
     const overallCollPct = debt > 0 ? (collection / debt) * 100 : 0;
-    const passGate_Collection = overallCollPct >= Number(collRules.thresholdPct || 30);
+    const passGate_Collection = overallCollPct >= Number(collRules.thresholdPct || 60);
 
     let totalCollectionCommission = 0;
     if (passGate_Collection) {
       if (collRules.commType === 'percent') {
         totalCollectionCommission = collection * (Number(collRules.commValue || 0.5) / 100);
       } else {
-        totalCollectionCommission = Number(collRules.commValue || 0);
+        totalCollectionCommission = Number(collRules.commValue || 500);
       }
     }
 
-    // 4. تقييم استحقاق العمولات
+    // 4. احتساب الاستحقاق النهائي
     const meetsGenTargetReq = !isGenTargetMandatory || passGate_GenTarget;
     const isEligibleForGroupCommissions = isRepActive && meetsGenTargetReq && passGate_MandatoryGroups && passGate_MinGroupsCount;
     const totalGroupCommissionEarned = isEligibleForGroupCommissions ? rawGroupCommSum : 0;
