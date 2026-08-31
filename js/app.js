@@ -23,11 +23,9 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [analyticsSortBy, setAnalyticsSortBy] = useState('highestPct');
 
-  // التحكم في درج التفكيك بالمطبخ
   const [expandedGroupIdx, setExpandedGroupIdx] = useState(null);
   const [selectedRepToAdd, setSelectedRepToAdd] = useState({});
 
-  // 1. القواعد الرسمية المعتمدة
   const [generalRules, setGeneralRules] = useState({
     isGenTargetMandatory: true,
     generalThresholdPct: 80,
@@ -50,7 +48,6 @@ function App() {
 
   const [repsData, setRepsData] = useState([]);
 
-  // 2. المطبخ التجريبي (بيانات وقواعد مستقلة للتخطيط والمحاكاة)
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(null);
   const [kitchenGroupRules, setKitchenGroupRules] = useState(null);
   const [kitchenRepsData, setKitchenRepsData] = useState(null);
@@ -119,7 +116,6 @@ function App() {
     if (currentUser) loadData(currentUser);
   }, []);
 
-  // دوال إدارة وتخصيص المطبخ
   const updateKitchenGroupRule = (gIdx, field, val) => {
     const updated = JSON.parse(JSON.stringify(kitchenGroupRules || groupRules));
     updated[gIdx] = { ...updated[gIdx], [field]: val === '' ? '' : (field === 'thresholdPct' || field === 'commValue' ? Number(val) : val) };
@@ -167,7 +163,7 @@ function App() {
   };
 
   const handleAddNewDepartment = () => {
-    const name = prompt('أدخل اسم المجموعة / القسم الجديد (مثال: قسم التجميل، كاش فان):');
+    const name = prompt('أدخل اسم المجموعة / القسم الجديد:');
     if (name && name.trim()) {
       const newGrp = {
         id: (kitchenGroupRules || groupRules).length,
@@ -183,7 +179,7 @@ function App() {
         ...r,
         groups: [...(r.groups || []), { target: 0, sales: 0, customComm: null }]
       })));
-      showToast(`تمت إضافة ${name} بنجاح لمطبخ التخطيط`);
+      showToast(`تمت إضافة ${name} بنجاح`);
     }
   };
 
@@ -217,7 +213,7 @@ function App() {
         groupRules,
         reps: repsData
       }, currentUser);
-      showToast(res.message || 'تم تثبيت الشروط والأهداف الرسمية بنجاح 🔒');
+      showToast(res.message || 'تم تثبيت الشروط والأهداف بنجاح 🔒');
       loadData(currentUser);
     } catch (err) {
       showToast('تم حفظ التعديلات');
@@ -233,7 +229,7 @@ function App() {
     setSyncLoading(true);
     try {
       const res = await ApiService.approveMonth(monthKey, currentUser);
-      showToast(res.message || 'تم الاعتماد النهائي وإقفال الشهر المالي 🔒');
+      showToast(res.message || 'تم الاعتماد النهائي وإقفال الشهر 🔒');
       setMonthStatus('approved');
       loadData(currentUser);
     } catch (err) {
@@ -250,7 +246,6 @@ function App() {
     setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
   };
 
-  // الحالة المعروضة (سواءً الرسمية أو محاكاة المطبخ)
   const activeGeneralRules = isKitchenApplied ? (kitchenGeneralRules || generalRules) : generalRules;
   const activeGroupRules = isKitchenApplied ? (kitchenGroupRules || groupRules) : groupRules;
   const activeRepsSource = isKitchenApplied ? (kitchenRepsData || repsData) : repsData;
@@ -335,7 +330,6 @@ function App() {
 
   return (
     <div className="pb-16 dir-rtl font-sans">
-      {/* الهيدر العلوي */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md p-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -433,7 +427,7 @@ function App() {
               onClick={() => setActiveTab('config')}
               className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 ${activeTab === 'config' ? 'bg-amber-500 text-slate-950' : 'bg-slate-900 text-slate-300'}`}
             >
-              <i className="fa-solid fa-sliders"></i> إعدادات البوابات والشروط الرسمية 🔒
+              <i className="fa-solid fa-sliders"></i> إعدادات البوابات والتحصيل 🔒
             </button>
             <button
               onClick={() => setActiveTab('analytics')}
@@ -452,13 +446,12 @@ function App() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 mt-6">
-        {/* بطاقات الإجماليات التنفيذية */}
         {currentUser.role !== 'rep' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 font-mono">
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">المبيعات العامة</span>
               <span className="text-base font-extrabold text-white">{formatNum(companyTotals.genSales)}</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">هدف {formatNum(companyTotals.genTarget)}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">هدف {formatNum(companyTotals.genTarget)}</span>
             </div>
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">نسبة الإنجاز</span>
@@ -489,9 +482,7 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 1: خلاصة المندوبين وبوابات الاستحقاق (Summary Table) */}
-        {/* ========================================================================= */}
+        {/* TAB 1: خلاصة المندوبين */}
         {activeTab === 'summary' && currentUser.role !== 'rep' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
@@ -604,9 +595,7 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 2: المطبخ الرئيسي لتخطيط الأهداف والعمولات (Planning Kitchen Dashboard) */}
-        {/* ========================================================================= */}
+        {/* TAB 2: المطبخ الرئيسي لتخطيط الأهداف والعمولات */}
         {activeTab === 'kitchen' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-3xl border border-purple-500/40 shadow-2xl space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
@@ -670,7 +659,7 @@ function App() {
                             <span>{km.group.name}</span>
                             {km.isWeak && (
                               <span className="bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[9px] px-2 py-0.5 rounded-full font-sans">
-                                ضعيف الإنجاز &lt;60% 🔥
+                                ضعيف الإنجاز أقل من 60% 🔥
                               </span>
                             )}
                           </div>
@@ -716,7 +705,7 @@ function App() {
                         </td>
                       </tr>
 
-                      {/* درج التفكيك والتخصيص الفردي (Accordion Drilldown) */}
+                      {/* درج التفكيك والتخصيص الفردي */}
                       {expandedGroupIdx === km.gIdx && (
                         <tr>
                           <td colSpan="11" className="bg-slate-950 p-5 border-y-2 border-purple-500/30">
@@ -729,7 +718,6 @@ function App() {
                                   <span className="text-[11px] text-slate-400">تعديل الأهداف والعمولات الخاصة الفردية (Override)</span>
                                 </div>
 
-                                {/* قائمة منسدلة لإشراك مناديب جدد */}
                                 <div className="flex items-center gap-2">
                                   <select
                                     value={selectedRepToAdd[km.gIdx] || ''}
@@ -823,9 +811,7 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 3: إعدادات البوابات والشروط الرسمية (Config) */}
-        {/* ========================================================================= */}
+        {/* TAB 3: الإعدادات الرسمية */}
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
@@ -847,7 +833,6 @@ function App() {
               )}
             </div>
 
-            {/* 1. بوابة الهدف العام */}
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
               <div className="flex items-center gap-2">
                 <input
@@ -894,7 +879,6 @@ function App() {
               </div>
             </div>
 
-            {/* 2. جدول المجموعات الـ 14 */}
             <div className="space-y-3 pt-2">
               <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
                 <i className="fa-solid fa-boxes-stacked"></i> شروط المجموعات الـ 14 (تحديد المجموعات الإلزامية الأساسية ⭐):
@@ -991,7 +975,6 @@ function App() {
               </div>
             </div>
 
-            {/* 3. بوابات وشرائح التحصيل */}
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-4">
               <div className="flex items-center gap-2">
                 <input
@@ -1016,7 +999,7 @@ function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block mb-1 font-sans">شرط نسبة التأهل لتحصيل &gt;60 يوم (%)</span>
+                  <span className="text-slate-400 block mb-1 font-sans">شرط نسبة التأهل لتحصيل فوق 60 يوم (%)</span>
                   <input
                     type="number"
                     disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
@@ -1034,11 +1017,11 @@ function App() {
                   />
                 </div>
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-400 block mb-1 font-sans">شرائح عمولة التحصيل &gt;60 يوم:</span>
+                  <span className="text-slate-400 block mb-1 font-sans">شرائح عمولة التحصيل فوق 60 يوم:</span>
                   <span className="text-slate-300 block text-[11px] font-sans">
-                    • عند تحقيق $\ge 40\%$: عمولة <b>1.0%</b> من التحصيل
+                    • عند تحقيق نسبة 40% فأكثر: عمولة <b>1.0%</b> من التحصيل
                     <br/>
-                    • عند تحقيق $\ge 50\%$: عمولة <b>2.0%</b> من التحصيل
+                    • عند تحقيق نسبة 50% فأكثر: عمولة <b>2.0%</b> من التحصيل
                   </span>
                 </div>
               </div>
@@ -1046,17 +1029,13 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 4: التحليل المالي للمجموعات */}
-        {/* ========================================================================= */}
+        {/* TAB 4: التحليل المالي */}
         {activeTab === 'analytics' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
-              <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <i className="fa-solid fa-chart-pie text-teal-400"></i> التحليل المالي والترتيب للمجموعات الـ 14
-                </h2>
-              </div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <i className="fa-solid fa-chart-pie text-teal-400"></i> التحليل المالي والترتيب للمجموعات الـ 14
+              </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 font-mono">
