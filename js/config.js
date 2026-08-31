@@ -1,38 +1,38 @@
 /**
- * الإعدادات المركزية والافتراضية للمنظومة
+ * الإعدادات المركزية والافتراضية للمنظومة - v14.0 Dynamic
  */
 
 const CONFIG = {
   API_URL: "https://script.google.com/macros/s/AKfycbxE0uaJ6WoKzb6QPZE8yqkeJKb0x1DWog8-3nkYILdJHMknarUkd0JM3X0pNnZm9ZVzLQ/exec",
 
   DEFAULT_GENERAL_RULES: {
+    isGenTargetMandatory: true,
     generalThresholdPct: 80,
-    generalTargetCommValue: 500,
+    generalTargetCommValue: 0,
     minGroupsRequired: 7,
-    minOver60RequiredPct: 40,
-    collectionTiers: [
-      { minPct: 0, maxPct: 19.99, rate: 0.0000 },
-      { minPct: 20, maxPct: 29.99, rate: 0.0025 },
-      { minPct: 30, maxPct: 39.99, rate: 0.0050 },
-      { minPct: 40, maxPct: 59.99, rate: 0.0075 },
-      { minPct: 60, maxPct: 1000, rate: 0.0100 }
-    ]
+    collectionRules: {
+      isCollMandatory: false,
+      thresholdPct: 60,
+      commType: 'fixed',
+      commValue: 500
+    }
   },
 
+  // خريطة الدمج الأساسية
   FALLBACK_GROUPS: [
-    { id: 0, name: "شوكلاتة ايجلو", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 1, name: "بيكاديلي /ديجستف", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 2, name: "البقوليات + قشطة", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 3, name: "الطاقة", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 4, name: "زيت زيتون + طحينة", thresholdPct: 70, commType: 'fixed', commValue: 300 },
-    { id: 5, name: "جيلي جلب + كوزو", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 6, name: "رز فايف ستار", thresholdPct: 70, commType: 'fixed', commValue: 150 },
-    { id: 7, name: "بيسكوزا + سما فود", thresholdPct: 70, commType: 'fixed', commValue: 400 },
-    { id: 8, name: "اكسيلو", thresholdPct: 70, commType: 'fixed', commValue: 300 },
-    { id: 9, name: "عماني/دريم واي", thresholdPct: 70, commType: 'fixed', commValue: 200 },
-    { id: 10, name: "عسل", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 11, name: "تشوبا تشوبس", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 12, name: "كنجسي", thresholdPct: 70, commType: 'fixed', commValue: 250 },
-    { id: 13, name: "سن لوب", thresholdPct: 70, commType: 'fixed', commValue: 250 }
+    { id: 0, name: "شوكلاتة ايجلو", codes: ["501"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 1, name: "بيكاديلي /ديجستف", codes: ["210"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 2, name: "البقوليات + قشطة", codes: ["2010", "12020", "22020", "32020"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 3, name: "الطاقة", codes: ["70"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 4, name: "زيت زيتون + طحينة", codes: ["205", "2040"], thresholdPct: 70, commType: 'fixed', commValue: 300 },
+    { id: 5, name: "جيلي جلب + كوزو", codes: ["40", "2301"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 6, name: "رز فايف  ستار", codes: ["206"], thresholdPct: 70, commType: 'fixed', commValue: 150 },
+    { id: 7, name: "بيسكوزا + سما فود", codes: ["82", "81"], thresholdPct: 70, commType: 'fixed', commValue: 400 },
+    { id: 8, name: "اكسيلو", codes: ["150"], thresholdPct: 70, commType: 'fixed', commValue: 300 },
+    { id: 9, name: "عماني/دريم واي", codes: ["3010", "3015", "2305"], thresholdPct: 70, commType: 'fixed', commValue: 200 },
+    { id: 10, name: "عسل", codes: ["215", "90"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 11, name: "تشوبا تشوبس", codes: ["800", "100"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 12, name: "كنجسي", codes: ["83"], thresholdPct: 70, commType: 'fixed', commValue: 250 },
+    { id: 13, name: "سن لوب", codes: ["180", "140", "130", "110", "1200", "1001", "1208", "1234"], thresholdPct: 70, commType: 'fixed', commValue: 250 }
   ]
 };
