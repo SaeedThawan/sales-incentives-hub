@@ -1,14 +1,13 @@
 /**
- * محرك بوابات الاستحقاق الديناميكية وقواعد الأعمال المرنة
- * Dynamic Governance & Gating Incentive Engine v7.0
+ * محرك احتساب الأداء وبوابات الاستحقاق والتحصيل المتقدم
+ * Enterprise Compensation & Planning Engine v8.0
  */
 
 const CalcEngine = {
-  getCollectionTierRate(collPct, tiers) {
+  getTierRate(pct, tiers) {
     if (!tiers || !Array.isArray(tiers) || tiers.length === 0) return 0;
-    // ترتيب تنازلي لاختيار أعلى شريحة مؤهلة
-    const sorted = [...tiers].sort((a, b) => b.minPct - a.minPct);
-    const matched = sorted.find(t => collPct >= Number(t.minPct));
+    const sorted = [...tiers].sort((a, b) => Number(b.minPct) - Number(a.minPct));
+    const matched = sorted.find(t => pct >= Number(t.minPct));
     return matched ? Number(matched.rate || 0) : 0;
   },
 
@@ -19,42 +18,29 @@ const CalcEngine = {
     const gRules = generalRules || CONFIG.DEFAULT_GENERAL_RULES;
     const grpRulesList = (groupRules && Array.isArray(groupRules)) ? groupRules : CONFIG.FALLBACK_GROUPS;
 
-    // =========================================================================
-    // 1. تقييم بوابة الهدف العام (General Target Evaluation)
-    // =========================================================================
+    // 1. بوابة الهدف العام
     const genTarget = Number(rep.generalTarget) || 0;
     const genSales = Number(rep.generalSales) || 0;
     const genPct = genTarget > 0 ? (genSales / genTarget) * 100 : 0;
     
-    const isGenTargetMandatory = gRules.isGenTargetMandatory !== false; // هل الهدف العام شرط إلزامي؟
+    const isGenTargetMandatory = gRules.isGenTargetMandatory !== false;
     const genThresholdPct = Number(gRules.generalThresholdPct !== undefined ? gRules.generalThresholdPct : 80);
     const passGate_GenTarget = genTarget > 0 ? (genPct >= genThresholdPct) : false;
+    const remainingGenSales = genTarget > 0 ? Math.max(0, (genTarget * (genThresholdPct / 100)) - genSales) : 0;
 
-    const requiredGenSales = genTarget * (genThresholdPct / 100);
-    const remainingGenSales = genTarget > 0 ? Math.max(0, requiredGenSales - genSales) : 0;
-
-    // =========================================================================
-    // 2. تقييم المجموعات الـ 14 والمجموعات الإلزامية (Mandatory Core Groups)
-    // =========================================================================
+    // 2. بوابة المجموعات الـ 14 والتفكيك الفردي
     let qualifiedGroupsCount = 0;
     let failedMandatoryGroups = [];
     let rawGroupCommSum = 0;
     const repGroups = Array.isArray(rep.groups) ? rep.groups : [];
 
-    const detailedGroups = repGroups.map((grp, gIdx) => {
-      const rule = grpRulesList[gIdx] || { 
-        thresholdPct: 70, 
-        commType: 'fixed', 
-        commValue: 250, 
-        isActive: true,
-        isMandatory: false,
-        name: `مجموعة ${gIdx + 1}` 
-      };
-
+    const detailedGroups = grpRulesList.map((rule, gIdx) => {
+      const repGrp = repGroups[gIdx] || { target: 0, sales: 0, customComm: null };
       const isGroupActive = rule.isActive !== false;
       const isGroupMandatory = rule.isMandatory === true;
-      const grpTarget = Number(grp.target) || 0;
-      const grpSales = Number(grp.sales) || 0;
+
+      const grpTarget = Number(repGrp.target) || 0;
+      const grpSales = Number(repGrp.sales) || 0;
       const grpPct = grpTarget > 0 ? (grpSales / grpTarget) * 100 : 0;
       
       const thresholdPct = Number(rule.thresholdPct !== undefined ? rule.thresholdPct : 70);
@@ -65,11 +51,12 @@ const CalcEngine = {
 
       if (isQualified) qualifiedGroupsCount++;
       if (isGroupMandatory && !isQualified) {
-        failedMandatoryGroups.push(grp.name || rule.name);
+        failedMandatoryGroups.push(rule.name);
       }
 
-      const effectiveCommVal = (grp.customComm !== undefined && grp.customComm !== null && grp.customComm !== '')
-        ? Number(grp.customComm)
+      // العمولة المخصصة الفردية (Override) إن وجدت أو العامة
+      const effectiveCommVal = (repGrp.customComm !== undefined && repGrp.customComm !== null && repGrp.customComm !== '')
+        ? Number(repGrp.customComm)
         : Number(rule.commValue || 0);
 
       let potentialComm = 0;
@@ -80,15 +67,18 @@ const CalcEngine = {
           potentialComm = Math.max(0, grpSales) * (effectiveCommVal / 100);
         }
       }
-      
+
       if (isGroupActive) {
         rawGroupCommSum += potentialComm;
       }
 
       return {
-        ...grp,
+        id: rule.id !== undefined ? rule.id : gIdx,
         originalIndex: gIdx,
-        name: grp.name || rule.name,
+        name: rule.name,
+        target: grpTarget,
+        sales: grpSales,
+        customComm: repGrp.customComm,
         isActive: isGroupActive,
         isMandatory: isGroupMandatory,
         thresholdPct,
@@ -106,18 +96,13 @@ const CalcEngine = {
     const passGate_MinGroupsCount = qualifiedGroupsCount >= minGroupsReq;
     const passGate_MandatoryGroups = failedMandatoryGroups.length === 0;
 
-    // =========================================================================
-    // 3. تقييم بوابات التحصيل والديون الصافية بعد استبعاد المتعثر
-    // =========================================================================
+    // 3. بوابة التحصيل وأعمار الديون (صافي بعد استبعاد المتعثر)
     const collRules = gRules.collectionRules || {
-      isCollMandatory: true,
+      isCollMandatory: false,
       over60: {
-        isMandatory: true,
+        isMandatory: false,
         thresholdPct: 40,
-        tiers: [
-          { minPct: 40, rate: 0.01 }, // 40% يعطيه 1%
-          { minPct: 50, rate: 0.02 }  // 50% يعطيه 2%
-        ]
+        tiers: [{ minPct: 40, rate: 0.01 }, { minPct: 50, rate: 0.02 }]
       },
       under60: {
         isActive: true,
@@ -127,21 +112,17 @@ const CalcEngine = {
       }
     };
 
-    // أ) ديون فوق 60 يوم (صافي)
     const debtOver60Net = Number(rep.debtOver60Net) || 0;
     const collOver60 = Number(rep.collOver60) || 0;
-    const collOver60Pct = debtOver60Net > 0 ? (collOver60 / debtOver60Net) * 100 : (collOver60 > 0 ? 100 : 0);
+    const collOver60Pct = debtOver60Net > 0 ? (collOver60 / debtOver60Net) * 100 : 0;
     
     const isOver60Mandatory = collRules.over60?.isMandatory === true;
-    const over60ThresholdPct = Number(collRules.over60?.thresholdPct || 40);
-    const passGate_Over60 = debtOver60Net > 0 ? (collOver60Pct >= over60ThresholdPct) : true;
+    const over60Threshold = Number(collRules.over60?.thresholdPct || 40);
+    const passGate_Over60 = debtOver60Net > 0 ? (collOver60Pct >= over60Threshold) : true;
 
-    // عمولة فوق 60 بحسب الشرائح
-    const over60Tiers = collRules.over60?.tiers || [{ minPct: 40, rate: 0.01 }, { minPct: 50, rate: 0.02 }];
-    const over60CommRate = this.getCollectionTierRate(collOver60Pct, over60Tiers);
+    const over60CommRate = this.getTierRate(collOver60Pct, collRules.over60?.tiers);
     const commOver60Earned = collOver60 * over60CommRate;
 
-    // ب) ديون أقل من 60 يوم
     const debtUnder60 = Number(rep.debtUnder60) || Number(rep.debt) || 0;
     const collUnder60 = Number(rep.collUnder60) || Number(rep.collection) || 0;
     const collUnder60Pct = debtUnder60 > 0 ? (collUnder60 / debtUnder60) * 100 : 0;
@@ -156,24 +137,16 @@ const CalcEngine = {
 
     const totalCollectionCommission = isRepActive ? (commUnder60Earned + commOver60Earned) : 0;
 
-    // =========================================================================
-    // 4. البوابات الإلزامية المركزية (The Core Decision Engine)
-    // =========================================================================
-    // هل اجتاز شروط البوابات الأساسية المطلوبة لدخول نظام عمولات المجموعات والعام؟
+    // 4. استحقاق العمولات التراكمي
     const meetsGenTargetReq = !isGenTargetMandatory || passGate_GenTarget;
     const meetsOver60Req = !isOver60Mandatory || passGate_Over60;
-    const meetsMandatoryGroupsReq = passGate_MandatoryGroups;
-    const meetsMinGroupsReq = passGate_MinGroupsCount;
 
-    // استحقاق عمولات المجموعات
-    const isEligibleForGroupCommissions = isRepActive && meetsGenTargetReq && meetsOver60Req && meetsMandatoryGroupsReq && meetsMinGroupsReq;
+    const isEligibleForGroupCommissions = isRepActive && meetsGenTargetReq && meetsOver60Req && passGate_MandatoryGroups && passGate_MinGroupsCount;
     const totalGroupCommissionEarned = isEligibleForGroupCommissions ? rawGroupCommSum : 0;
 
-    // استحقاق عمولة الهدف العام
     const isEligibleForGenTargetComm = isRepActive && passGate_GenTarget && meetsOver60Req;
     const generalTargetCommEarned = isEligibleForGenTargetComm ? (Number(gRules.generalTargetCommValue) || 0) : 0;
 
-    // الإجمالي الشامل المستحق
     const grandTotalCommission = totalGroupCommissionEarned + generalTargetCommEarned + totalCollectionCommission;
 
     const finalDetailedGroups = detailedGroups.map(grp => ({
@@ -181,24 +154,22 @@ const CalcEngine = {
       commEarned: isEligibleForGroupCommissions ? grp.potentialComm : 0
     }));
 
-    // تحديد أسباب الحجب بدقة للشفافية
+    // أسباب الحجب للشفافية
     let blockers = [];
     if (isGenTargetMandatory && !passGate_GenTarget) {
       blockers.push(`باقي للهدف العام ${Math.round(remainingGenSales).toLocaleString()} ر.س`);
     }
     if (isOver60Mandatory && !passGate_Over60) {
-      blockers.push(`تحصيل >60 يوم (${collOver60Pct.toFixed(1)}% < ${over60ThresholdPct}%)`);
+      blockers.push(`تحصيل >60 يوم (${collOver60Pct.toFixed(1)}% < ${over60Threshold}%)`);
     }
     if (!passGate_MandatoryGroups) {
-      blockers.push(`لم يحقق مجموعات إلزامية: [${failedMandatoryGroups.join('، ')}]`);
+      blockers.push(`أصناف إلزامية غير مكتملة: [${failedMandatoryGroups.join('، ')}]`);
     }
     if (!passGate_MinGroupsCount) {
       blockers.push(`حقق ${qualifiedGroupsCount} من أصل ${minGroupsReq} مجموعات`);
     }
 
-    const eligibilityStatusText = blockers.length === 0 
-      ? 'مستحق بالكامل ✅' 
-      : `محجوبة: ${blockers.join(' | ')}`;
+    const eligibilityStatusText = blockers.length === 0 ? 'مستحق بالكامل ✅' : `محجوبة: ${blockers.join(' | ')}`;
 
     return {
       ...rep,
@@ -206,7 +177,6 @@ const CalcEngine = {
       genTarget,
       genSales,
       genPct,
-      requiredGenSales,
       remainingGenSales,
       passGate_GenTarget,
       isGeneralTargetQualified: isEligibleForGenTargetComm,
@@ -238,12 +208,11 @@ const CalcEngine = {
   calculateCompanyTotals(processedReps, generalRules) {
     let genTarget = 0, genSales = 0, debt = 0, collection = 0;
     let collComm = 0, groupCommSum = 0, genTargetCommSum = 0, grandComm = 0;
-    let fullyQualifiedCount = 0;
-    let activeRepsCount = 0;
+    let qualifiedCount = 0, activeCount = 0;
 
     (processedReps || []).forEach(r => {
       if (r.isActive !== false) {
-        activeRepsCount++;
+        activeCount++;
         genTarget += r.genTarget || 0;
         genSales += r.genSales || 0;
         debt += r.debt || 0;
@@ -252,7 +221,7 @@ const CalcEngine = {
         groupCommSum += r.totalGroupCommissionEarned || 0;
         genTargetCommSum += r.generalTargetCommEarned || 0;
         grandComm += r.grandTotalCommission || 0;
-        if (r.isGroupsGateQualified) fullyQualifiedCount++;
+        if (r.isGroupsGateQualified) qualifiedCount++;
       }
     });
 
@@ -272,53 +241,60 @@ const CalcEngine = {
       groupCommSum,
       genTargetCommSum,
       grandComm,
-      qualifiedGroupsCount: fullyQualifiedCount,
-      totalReps: activeRepsCount
+      qualifiedGroupsCount: qualifiedCount,
+      totalReps: activeCount
     };
   },
 
-  analyzeAndSortGroups(groupRules, processedReps, sortBy = 'highestPct') {
-    const analytics = (groupRules || []).map((grpRule, gIdx) => {
+  // تحليل المطبخ التخطيطي الشامل
+  calculateKitchenMetrics(groupRules, repsData) {
+    return (groupRules || []).map((grp, gIdx) => {
       let totalTarget = 0;
       let totalSales = 0;
-      let qualifyingRepsCount = 0;
-      let totalEarnedComm = 0;
+      let assignedRepsCount = 0;
+      let qualifyingCount = 0;
+      let totalPotentialComm = 0;
 
-      (processedReps || []).forEach(rep => {
-        if (rep.isActive !== false) {
-          const grp = rep.detailedGroups ? rep.detailedGroups[gIdx] : null;
-          if (grp && grp.isActive) {
-            totalTarget += grp.target || 0;
-            totalSales += grp.sales || 0;
+      (repsData || []).forEach(rep => {
+        if (rep.isActive !== false && rep.groups && rep.groups[gIdx]) {
+          const rGrp = rep.groups[gIdx];
+          const t = Number(rGrp.target) || 0;
+          const s = Number(rGrp.sales) || 0;
+          if (t > 0 || s > 0) assignedRepsCount++;
+          totalTarget += t;
+          totalSales += s;
 
-            if (grp.isQualified) {
-              qualifyingRepsCount++;
-              if (rep.isGroupsGateQualified) {
-                totalEarnedComm += grp.potentialComm;
-              }
-            }
+          const pct = t > 0 ? (s / t) * 100 : 0;
+          const isQ = t > 0 && pct >= Number(grp.thresholdPct || 70);
+          if (isQ) {
+            qualifyingCount++;
+            const comm = (rGrp.customComm !== undefined && rGrp.customComm !== null && rGrp.customComm !== '')
+              ? Number(rGrp.customComm)
+              : Number(grp.commValue || 0);
+            totalPotentialComm += grp.commType === 'percent' ? (s * (comm / 100)) : comm;
           }
         }
       });
 
-      const avgPct = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
+      const avgAchievementPct = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
+      const avgRepTarget = assignedRepsCount > 0 ? totalTarget / assignedRepsCount : 0;
+      const avgCommissionFromTargetPct = avgRepTarget > 0 ? (Number(grp.commValue || 0) / avgRepTarget) * 100 : 0;
+      const commCostFromSalesPct = totalSales > 0 ? (totalPotentialComm / totalSales) * 100 : 0;
+      const isWeak = avgAchievementPct < 60 && totalTarget > 0;
 
       return {
         gIdx,
-        rule: grpRule,
+        group: grp,
+        assignedRepsCount,
         totalTarget,
         totalSales,
-        avgPct,
-        qualifyingRepsCount,
-        totalEarnedComm
+        avgAchievementPct,
+        qualifyingCount,
+        totalPotentialComm,
+        avgCommissionFromTargetPct,
+        commCostFromSalesPct,
+        isWeak
       };
-    });
-
-    return analytics.sort((a, b) => {
-      if (sortBy === 'highestPct') return b.avgPct - a.avgPct;
-      if (sortBy === 'highestSales') return b.totalSales - a.totalSales;
-      if (sortBy === 'lowestPct') return a.avgPct - b.avgPct;
-      return 0;
     });
   }
 };
