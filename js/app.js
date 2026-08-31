@@ -27,7 +27,7 @@ function App() {
   const [expandedGroupIdx, setExpandedGroupIdx] = useState(null);
   const [selectedRepToAdd, setSelectedRepToAdd] = useState({});
 
-  // القواعد الرسمية المعتمدة (العقل المدبر)
+  // 1. القواعد الرسمية المعتمدة (العقل المدبر)
   const [generalRules, setGeneralRules] = useState({
     isGenTargetMandatory: true,
     generalThresholdPct: 80,
@@ -47,7 +47,7 @@ function App() {
 
   const [repsData, setRepsData] = useState([]);
 
-  // المطبخ التجريبي
+  // 2. المطبخ التجريبي (Sandbox)
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(null);
   const [kitchenGroupRules, setKitchenGroupRules] = useState(null);
   const [kitchenRepsData, setKitchenRepsData] = useState(null);
@@ -214,6 +214,7 @@ function App() {
     setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
   };
 
+  // دوال تخصيص وتفكيك المطبخ
   const updateKitchenGroupRule = (gIdx, field, val) => {
     const updated = JSON.parse(JSON.stringify(kitchenGroupRules || groupRules));
     updated[gIdx] = { ...updated[gIdx], [field]: val === '' ? '' : (field === 'thresholdPct' || field === 'commValue' ? Number(val) : val) };
@@ -490,12 +491,13 @@ function App() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 mt-6">
+        {/* شريط الإجماليات التنفيذية */}
         {currentUser.role !== 'rep' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 font-mono">
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">المبيعات العامة</span>
               <span className="text-base font-extrabold text-white">{formatNum(companyTotals.genSales)}</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">هدف {formatNum(companyTotals.genTarget)}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">هدف {formatNum(companyTotals.genTarget)}</span>
             </div>
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">نسبة الإنجاز</span>
@@ -535,7 +537,7 @@ function App() {
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
                     <i className="fa-solid fa-sliders text-amber-400"></i> إدارة بوابات الاستحقاق وشروط العمولات الرسمية
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في جعل الشروط أساسية أو اختيارية وتحديد نسب التأهل</p>
+                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في جعل الشروط أساسية أو اختيارية وتحديد نسب التأهل (الحساب لحظي ومباشر)</p>
                 </div>
                 
                 <div className="flex items-center gap-2">
@@ -1043,7 +1045,7 @@ function App() {
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             rep.isGroupsGateQualified ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-950 text-rose-300'
                           }`}>
-                            {rep.qualifiedGroupsCount} / 14
+                            {rep.qualifiedGroupsCount} / {rep.assignedGroupsCount || 14}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-teal-300 font-bold text-sm">{formatNum(rep.totalGroupCommissionEarned)} ر.س</td>
