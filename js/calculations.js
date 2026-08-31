@@ -1,6 +1,5 @@
 /**
- * محرك احتساب الأداء وبوابات الاستحقاق والتحصيل المتقدم ومؤشرات المطبخ
- * Enterprise Compensation & Planning Engine v8.1
+ * محرك احتساب الأداء وبوابات الاستحقاق والتحصيل المتقدم ومؤشرات المطبخ v9.5
  */
 
 const CalcEngine = {
@@ -28,7 +27,7 @@ const CalcEngine = {
     const passGate_GenTarget = genTarget > 0 ? (genPct >= genThresholdPct) : false;
     const remainingGenSales = genTarget > 0 ? Math.max(0, (genTarget * (genThresholdPct / 100)) - genSales) : 0;
 
-    // 2. بوابة المجموعات
+    // 2. بوابة المجموعات الـ 14 والتفكيك الفردي
     let qualifiedGroupsCount = 0;
     let failedMandatoryGroups = [];
     let rawGroupCommSum = 0;
@@ -98,55 +97,37 @@ const CalcEngine = {
     // 3. التحصيل
     const collRules = gRules.collectionRules || {
       isCollMandatory: false,
+      thresholdPct: 30,
+      commType: 'percent',
+      commValue: 0.5,
       over60: {
         isMandatory: false,
         thresholdPct: 40,
         tiers: [{ minPct: 40, rate: 0.01 }, { minPct: 50, rate: 0.02 }]
       },
-      under60: {
-        isActive: true,
-        thresholdPct: 30,
-        commType: 'percent',
-        commValue: 0.5
-      }
+      under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 }
     };
 
-    const debtOver60Net = Number(rep.debtOver60Net) || 0;
-    const collOver60 = Number(rep.collOver60) || 0;
-    const collOver60Pct = debtOver60Net > 0 ? (collOver60 / debtOver60Net) * 100 : 0;
-    
-    const isOver60Mandatory = collRules.over60?.isMandatory === true;
-    const over60Threshold = Number(collRules.over60?.thresholdPct || 40);
-    const passGate_Over60 = debtOver60Net > 0 ? (collOver60Pct >= over60Threshold) : true;
+    const debt = Number(rep.debt) || 0;
+    const collection = Number(rep.collection) || 0;
+    const overallCollPct = debt > 0 ? (collection / debt) * 100 : 0;
 
-    const over60CommRate = this.getTierRate(collOver60Pct, collRules.over60?.tiers);
-    const commOver60Earned = collOver60 * over60CommRate;
-
-    const debtUnder60 = Number(rep.debtUnder60) || Number(rep.debt) || 0;
-    const collUnder60 = Number(rep.collUnder60) || Number(rep.collection) || 0;
-    const collUnder60Pct = debtUnder60 > 0 ? (collUnder60 / debtUnder60) * 100 : 0;
-    const passGate_Under60 = collUnder60Pct >= Number(collRules.under60?.thresholdPct || 30);
-    
-    let commUnder60Earned = 0;
-    if (collRules.under60?.isActive && passGate_Under60) {
-      commUnder60Earned = collRules.under60.commType === 'fixed'
-        ? Number(collRules.under60.commValue || 0)
-        : collUnder60 * (Number(collRules.under60.commValue || 0) / 100);
+    let totalCollectionCommission = 0;
+    if (collRules.commType === 'percent') {
+      totalCollectionCommission = collection * (Number(collRules.commValue || 0.5) / 100);
+    } else {
+      totalCollectionCommission = Number(collRules.commValue || 0);
     }
 
-    const totalCollectionCommission = isRepActive ? (commUnder60Earned + commOver60Earned) : 0;
-
-    // 4. استحقاق العمولات
+    // 4. استحقاق العمولات التراكمي
     const meetsGenTargetReq = !isGenTargetMandatory || passGate_GenTarget;
-    const meetsOver60Req = !isOver60Mandatory || passGate_Over60;
-
-    const isEligibleForGroupCommissions = isRepActive && meetsGenTargetReq && meetsOver60Req && passGate_MandatoryGroups && passGate_MinGroupsCount;
+    const isEligibleForGroupCommissions = isRepActive && meetsGenTargetReq && passGate_MandatoryGroups && passGate_MinGroupsCount;
     const totalGroupCommissionEarned = isEligibleForGroupCommissions ? rawGroupCommSum : 0;
 
-    const isEligibleForGenTargetComm = isRepActive && passGate_GenTarget && meetsOver60Req;
+    const isEligibleForGenTargetComm = isRepActive && passGate_GenTarget;
     const generalTargetCommEarned = isEligibleForGenTargetComm ? (Number(gRules.generalTargetCommValue) || 0) : 0;
 
-    const grandTotalCommission = totalGroupCommissionEarned + generalTargetCommEarned + totalCollectionCommission;
+    const grandTotalCommission = totalGroupCommissionEarned + generalTargetCommEarned + (isRepActive ? totalCollectionCommission : 0);
 
     const finalDetailedGroups = detailedGroups.map(grp => ({
       ...grp,
@@ -156,9 +137,6 @@ const CalcEngine = {
     let blockers = [];
     if (isGenTargetMandatory && !passGate_GenTarget) {
       blockers.push(`باقي للهدف العام ${Math.round(remainingGenSales).toLocaleString()} ر.س`);
-    }
-    if (isOver60Mandatory && !passGate_Over60) {
-      blockers.push(`تحصيل فوق 60 يوم (${collOver60Pct.toFixed(1)}% < ${over60Threshold}%)`);
     }
     if (!passGate_MandatoryGroups) {
       blockers.push(`أصناف إلزامية غير مكتملة: [${failedMandatoryGroups.join('، ')}]`);
@@ -185,19 +163,10 @@ const CalcEngine = {
       failedMandatoryGroups,
       detailedGroups: finalDetailedGroups,
       totalGroupCommissionEarned,
-      debt: Number(rep.debt) || 0,
-      collection: Number(rep.collection) || 0,
-      debtUnder60,
-      collUnder60,
-      collUnder60Pct,
-      debtOver60Net,
-      collOver60,
-      collOver60Pct,
-      passGate_Over60,
-      over60CommRate,
-      commOver60Earned,
-      commUnder60Earned,
-      collectionCommission: totalCollectionCommission,
+      debt,
+      collection,
+      overallCollPct,
+      collectionCommission: isRepActive ? totalCollectionCommission : 0,
       grandTotalCommission,
       eligibilityStatusText
     };
