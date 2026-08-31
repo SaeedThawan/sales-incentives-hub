@@ -1,5 +1,5 @@
 /**
- * محرك احتساب الأداء وبوابات الاستحقاق - v15.0
+ * محرك احتساب الأداء وبوابات الاستحقاق الحسابية الدقيقة - v16.0
  */
 
 const CalcEngine = {
@@ -20,7 +20,7 @@ const CalcEngine = {
     const passGate_GenTarget = genTarget > 0 ? (genPct >= genThresholdPct) : false;
     const remainingGenSales = genTarget > 0 ? Math.max(0, (genTarget * (genThresholdPct / 100)) - genSales) : 0;
 
-    // 2. تقييم المجموعات الـ 14 (المكلف بها فقط)
+    // 2. تقييم المجموعات الـ 14 (تطابق معادلة الإكسل)
     let assignedGroupsCount = 0;
     let qualifiedGroupsCount = 0;
     let failedMandatoryGroups = [];
@@ -40,6 +40,7 @@ const CalcEngine = {
       const thresholdTargetSales = grpTarget * (thresholdPct / 100);
       const remainingToThreshold = grpTarget > 0 ? Math.max(0, thresholdTargetSales - grpSales) : 0;
       
+      // لا يحتسب التأهل إلا إذا كان الهدف أكبر من صفر والنسبة >= 70%
       const isAssigned = grpTarget > 0;
       const isQualified = isGroupActive && isAssigned && (grpPct >= thresholdPct);
 
@@ -62,7 +63,7 @@ const CalcEngine = {
         }
       }
 
-      if (isGroupActive) {
+      if (isGroupActive && isAssigned) {
         rawGroupCommSum += potentialComm;
       }
 
@@ -91,17 +92,16 @@ const CalcEngine = {
     const passGate_MinGroupsCount = qualifiedGroupsCount >= minGroupsReq;
     const passGate_MandatoryGroups = failedMandatoryGroups.length === 0;
 
-    // 3. التحصيل معزول حالياً (0 ر.س)
+    // 3. عزل عمولة التحصيل حالياً (0 ر.س)
     const debt = Number(rep.debt) || 0;
     const collection = Number(rep.collection) || 0;
     const overallCollPct = debt > 0 ? (collection / debt) * 100 : 0;
     const totalCollectionCommission = 0;
 
-    // 4. احتساب الاستحقاق النهائي
+    // 4. تطبيق شرط الاستحقاق: إذا كان عدد المجموعات < 7 تصبح العمولة 0 ر.س
     const meetsGenTargetReq = !isGenTargetMandatory || passGate_GenTarget;
     const isEligibleForGroupCommissions = isRepActive && meetsGenTargetReq && passGate_MandatoryGroups && passGate_MinGroupsCount;
     
-    // إذا لم يحقق 7 مجموعات تصبح عمولة المجموعات 0 ر.س فوراً
     const totalGroupCommissionEarned = isEligibleForGroupCommissions ? rawGroupCommSum : 0;
 
     const isEligibleForGenTargetComm = isRepActive && passGate_GenTarget;
