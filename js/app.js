@@ -19,10 +19,12 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRep, setSelectedRep] = useState(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [showProposalDiffModal, setShowProposalDiffModal] = useState(false);
   const [notification, setNotification] = useState('');
   const [syncLoading, setSyncLoading] = useState(false);
   const [analyticsSortBy, setAnalyticsSortBy] = useState('highestPct');
 
+  // القواعد الرسمية المعتمدة
   const [generalRules, setGeneralRules] = useState({
     generalThresholdPct: 80,
     generalTargetCommValue: 500,
@@ -37,38 +39,43 @@ function App() {
     CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true }))
   );
 
+  const [repsData, setRepsData] = useState([]);
+
+  // مطبخ التخطيط (أهداف وقواعد تجريبية للمشرف)
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(() => {
     try {
-      const saved = localStorage.getItem('kitchen_general_rules');
-      return saved ? JSON.parse(saved) : {
-        generalThresholdPct: 80,
-        generalTargetCommValue: 500,
-        minGroupsRequired: 7,
-        collectionRules: {
-          under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 },
-          over60: { isActive: true, thresholdPct: 40, commType: 'percent', commValue: 1.0 }
-        }
-      };
-    } catch(e) { return null; }
+      const saved = localStorage.getItem('kitchen_gen_rules');
+      return saved ? JSON.parse(saved) : null;
+    } catch(e){ return null; }
   });
 
   const [kitchenGroupRules, setKitchenGroupRules] = useState(() => {
     try {
-      const saved = localStorage.getItem('kitchen_group_rules');
-      return saved ? JSON.parse(saved) : CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true }));
-    } catch(e) { return CONFIG.FALLBACK_GROUPS.map(g => ({ ...g, isActive: true })); }
+      const saved = localStorage.getItem('kitchen_grp_rules');
+      return saved ? JSON.parse(saved) : null;
+    } catch(e){ return null; }
+  });
+
+  const [kitchenRepsData, setKitchenRepsData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kitchen_reps_data');
+      return saved ? JSON.parse(saved) : null;
+    } catch(e){ return null; }
   });
 
   const [isKitchenApplied, setIsKitchenApplied] = useState(false);
-  const [repsData, setRepsData] = useState([]);
 
   useEffect(() => {
-    if (kitchenGeneralRules) localStorage.setItem('kitchen_general_rules', JSON.stringify(kitchenGeneralRules));
+    if (kitchenGeneralRules) localStorage.setItem('kitchen_gen_rules', JSON.stringify(kitchenGeneralRules));
   }, [kitchenGeneralRules]);
 
   useEffect(() => {
-    if (kitchenGroupRules) localStorage.setItem('kitchen_group_rules', JSON.stringify(kitchenGroupRules));
+    if (kitchenGroupRules) localStorage.setItem('kitchen_grp_rules', JSON.stringify(kitchenGroupRules));
   }, [kitchenGroupRules]);
+
+  useEffect(() => {
+    if (kitchenRepsData) localStorage.setItem('kitchen_reps_data', JSON.stringify(kitchenRepsData));
+  }, [kitchenRepsData]);
 
   const showToast = (msg) => {
     setNotification(msg);
@@ -114,19 +121,20 @@ function App() {
             }
           };
           setGeneralRules(mergedRules);
-          if (!localStorage.getItem('kitchen_general_rules')) setKitchenGeneralRules(mergedRules);
+          if (!kitchenGeneralRules) setKitchenGeneralRules(mergedRules);
         }
         if (data.groupRules && data.groupRules.length > 0) {
           const formattedGroups = data.groupRules.map(g => ({ ...g, isActive: g.isActive !== false }));
           setGroupRules(formattedGroups);
-          if (!localStorage.getItem('kitchen_group_rules')) setKitchenGroupRules(formattedGroups);
+          if (!kitchenGroupRules) setKitchenGroupRules(formattedGroups);
         }
         
-        // استلام البيانات للمدير أو المندوب بشكل مرن
         if (data.reps && data.reps.length > 0) {
-          setRepsData(data.reps);
+          const formattedReps = data.reps.map(r => ({ ...r, isActive: r.isActive !== false }));
+          setRepsData(formattedReps);
+          if (!kitchenRepsData) setKitchenRepsData(formattedReps);
         } else if (data.rep) {
-          setRepsData([data.rep]);
+          setRepsData([{ ...data.rep, isActive: true }]);
         }
 
         if (data.monthStatus) setMonthStatus(data.monthStatus);
@@ -143,49 +151,78 @@ function App() {
     if (currentUser) loadData(currentUser);
   }, []);
 
+  // تعديل أهداف المندوب في الجدول الرسمي (المدير العام)
+  const updateOfficialRepTarget = (repId, val) => {
+    setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
+  };
+
+  // تعديل أهداف المندوب في المطبخ (المشرف)
+  const updateKitchenRepTarget = (repId, val) => {
+    setKitchenRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
+  };
+
+  // حفظ وتثبيت القواعد والأهداف الرسمية للشهر (المدير العام)
   const handleSaveOfficialConfig = async () => {
     if (currentUser.role !== 'manager') {
-      showToast('تعديل وحفظ الشروط متاح للمدير العام فقط');
+      showToast('صلاحية الحفظ والتثبيت الرسمي للمدير العام فقط');
       return;
     }
     setSyncLoading(true);
     try {
-      const configPayload = { generalRules, groupRules };
-      const res = await ApiService.saveProposal(monthKey, configPayload, currentUser);
-      showToast(res.message || 'تم حفظ وتثبيت الشروط الرسمية بنجاح 🔒');
+      const res = await ApiService.saveOfficialConfig(monthKey, {
+        generalRules,
+        groupRules,
+        reps: repsData
+      }, currentUser);
+      showToast(res.message || 'تم تثبيت الشروط والأهداف الرسمية بنجاح 🔒');
       loadData(currentUser);
     } catch (err) {
-      showToast('تم حفظ الشروط');
+      showToast('تم الحفظ محلياً');
     }
     setSyncLoading(false);
   };
 
-  const handleSaveProposal = async () => {
+  // رفع المقترح الشامل من المطبخ للإدارة (المشرف)
+  const handleSaveSupervisorProposal = async () => {
     setSyncLoading(true);
     try {
       const proposalPayload = {
         generalRules: kitchenGeneralRules,
-        groupRules: kitchenGroupRules
+        groupRules: kitchenGroupRules,
+        repsTargets: kitchenRepsData.map(r => ({ id: r.id, name: r.name, generalTarget: r.generalTarget, groups: r.groups }))
       };
       const res = await ApiService.saveProposal(monthKey, proposalPayload, currentUser);
       showToast(res.message || 'تم رفع مقترح المطبخ بنجاح للإدارة');
       setMonthStatus('pending_approval');
       loadData(currentUser);
     } catch (err) {
-      showToast('تم حفظ المقترح');
+      showToast('تم حفظ المقترح محلياً');
       setMonthStatus('pending_approval');
     }
     setSyncLoading(false);
   };
 
+  // اعتماد وتطبيق مقترح المشرف في القواعد الرسمية (المدير العام)
   const handleAdoptProposal = () => {
     if (activeProposalInfo && activeProposalInfo.customRules) {
-      const rules = typeof activeProposalInfo.customRules === 'string' 
-        ? JSON.parse(activeProposalInfo.customRules) 
-        : activeProposalInfo.customRules;
-      if (rules.generalRules) setGeneralRules(rules.generalRules);
-      if (rules.groupRules) setGroupRules(rules.groupRules);
-      showToast('تم استيراد وتطبيق مقترح المشرف في القواعد الرسمية بنجاح');
+      try {
+        const rules = typeof activeProposalInfo.customRules === 'string' 
+          ? JSON.parse(activeProposalInfo.customRules) 
+          : activeProposalInfo.customRules;
+        
+        if (rules.generalRules) setGeneralRules(rules.generalRules);
+        if (rules.groupRules) setGroupRules(rules.groupRules);
+        if (rules.repsTargets) {
+          setRepsData(prev => prev.map(r => {
+            const match = rules.repsTargets.find(t => Number(t.id) === Number(r.id));
+            return match ? { ...r, generalTarget: match.generalTarget, groups: match.groups || r.groups } : r;
+          }));
+        }
+        showToast('تم اعتماد واستيراد مقترح المشرف بالكامل في القواعد الرسمية');
+        setShowProposalDiffModal(false);
+      } catch(e){
+        showToast('حدث خطأ أثناء قراءة المقترح');
+      }
     }
   };
 
@@ -220,15 +257,16 @@ function App() {
     setSyncLoading(false);
   };
 
-  const activeGeneralRules = isKitchenApplied ? kitchenGeneralRules : generalRules;
-  const activeGroupRules = isKitchenApplied ? kitchenGroupRules : groupRules;
+  const activeGeneralRules = isKitchenApplied ? (kitchenGeneralRules || generalRules) : generalRules;
+  const activeGroupRules = isKitchenApplied ? (kitchenGroupRules || groupRules) : groupRules;
+  const activeRepsSource = isKitchenApplied ? (kitchenRepsData || repsData) : repsData;
 
   const processedReps = useMemo(() => {
-    if (!Array.isArray(repsData)) return [];
-    return repsData
+    if (!Array.isArray(activeRepsSource)) return [];
+    return activeRepsSource
       .map(rep => CalcEngine.processRepData(rep, activeGeneralRules, activeGroupRules))
       .filter(Boolean);
-  }, [repsData, activeGeneralRules, activeGroupRules]);
+  }, [activeRepsSource, activeGeneralRules, activeGroupRules]);
 
   const companyTotals = useMemo(() => {
     return CalcEngine.calculateCompanyTotals(processedReps, activeGeneralRules);
@@ -254,43 +292,15 @@ function App() {
     return (currentUser && currentUser.role === 'rep' && visibleReps.length > 0) ? visibleReps[0] : null;
   }, [currentUser, visibleReps]);
 
-  const updateOfficialGroup = (idx, field, val) => {
-    const updated = [...groupRules];
-    updated[idx] = { ...updated[idx], [field]: val };
-    setGroupRules(updated);
-  };
-
-  const updateOfficialColl = (section, field, val) => {
-    setGeneralRules({
-      ...generalRules,
-      collectionRules: {
-        ...generalRules.collectionRules,
-        [section]: {
-          ...generalRules.collectionRules[section],
-          [field]: val
-        }
-      }
-    });
-  };
-
-  const updateKitchenGroup = (idx, field, val) => {
-    const updated = [...kitchenGroupRules];
-    updated[idx] = { ...updated[idx], [field]: val };
-    setKitchenGroupRules(updated);
-  };
-
-  const updateKitchenColl = (section, field, val) => {
-    setKitchenGeneralRules({
-      ...kitchenGeneralRules,
-      collectionRules: {
-        ...kitchenGeneralRules.collectionRules,
-        [section]: {
-          ...kitchenGeneralRules.collectionRules[section],
-          [field]: val
-        }
-      }
-    });
-  };
+  // استخراج المقترح للمقارنة
+  const parsedProposal = useMemo(() => {
+    if (!activeProposalInfo || !activeProposalInfo.customRules) return null;
+    try {
+      return typeof activeProposalInfo.customRules === 'string'
+        ? JSON.parse(activeProposalInfo.customRules)
+        : activeProposalInfo.customRules;
+    } catch(e){ return null; }
+  }, [activeProposalInfo]);
 
   if (!currentUser) {
     return (
@@ -301,7 +311,7 @@ function App() {
               <i className="fa-solid fa-shield-halved"></i>
             </div>
             <h1 className="text-2xl font-black text-white">نظام الأهداف والعمولات</h1>
-            <p className="text-xs text-slate-400">سجل الدخول بحسابك (ربط مباشر مع Google Sheets)</p>
+            <p className="text-xs text-slate-400">سجل الدخول برقم المندوب أو اسم المستخدم</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -343,6 +353,7 @@ function App() {
 
   return (
     <div className="pb-16 dir-rtl">
+      {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md p-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -398,7 +409,7 @@ function App() {
 
             {currentUser.role === 'supervisor' && monthStatus !== 'approved' && (
               <button
-                onClick={handleSaveProposal}
+                onClick={handleSaveSupervisorProposal}
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md shadow-purple-600/20"
               >
                 <i className="fa-solid fa-paper-plane text-amber-300"></i>
@@ -472,12 +483,9 @@ function App() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 mt-6">
-        {/* ========================================================================= */}
-        {/* واجهة المندوب الخاصة والشاملة (تظهر فقط عند تسجيل دخول مندوب مبيعات) */}
-        {/* ========================================================================= */}
+        {/* واجهة المندوب الخاصة */}
         {currentUser.role === 'rep' && currentRep ? (
           <div className="space-y-6">
-            {/* بطاقات أداء المندوب */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-sm">
                 <span className="text-slate-400 text-xs block mb-1">الهدف العام</span>
@@ -515,7 +523,6 @@ function App() {
               </div>
             </div>
 
-            {/* جدول تفاصيل أداء المجموعات الـ 14 للمندوب */}
             <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-4 shadow-xl">
               <div className="flex justify-between items-center border-b border-slate-700 pb-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -580,9 +587,7 @@ function App() {
           </div>
         ) : null}
 
-        {/* ========================================================================= */}
-        {/* واجهة المدير العام ومشرف المبيعات */}
-        {/* ========================================================================= */}
+        {/* إجماليات الإدارة */}
         {currentUser.role !== 'rep' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
@@ -618,18 +623,44 @@ function App() {
           </div>
         )}
 
-        {/* Tab 1: Summary Table (للمدير والمشرف) */}
+        {/* Tab 1: Summary Table مع إمكانية تعديل أهداف المناديب مباشرة للمدير */}
         {activeTab === 'summary' && currentUser.role !== 'rep' && (
           <div className="space-y-4">
-            <div className="relative max-w-md">
-              <i className="fa-solid fa-magnifying-glass absolute right-3.5 top-3 text-slate-400 text-sm"></i>
-              <input
-                type="text"
-                placeholder="ابحث باسم المندوب أو الرقم..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-              />
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+              <div className="relative max-w-md w-full">
+                <i className="fa-solid fa-magnifying-glass absolute right-3.5 top-3 text-slate-400 text-sm"></i>
+                <input
+                  type="text"
+                  placeholder="ابحث باسم المندوب أو الرقم..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {currentUser.role === 'manager' && (
+                <div className="flex items-center gap-2">
+                  {activeProposalInfo && (
+                    <button
+                      onClick={() => setShowProposalDiffModal(true)}
+                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md"
+                    >
+                      <i className="fa-solid fa-code-compare text-amber-300"></i>
+                      <span>مقارنة مقترح المشرف 🔍</span>
+                    </button>
+                  )}
+                  {monthStatus !== 'approved' && (
+                    <button
+                      onClick={handleSaveOfficialConfig}
+                      disabled={syncLoading}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+                    >
+                      <i className="fa-solid fa-floppy-disk text-amber-300"></i>
+                      <span>حفظ الأهداف والعمولات الرسمية 💾</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
@@ -639,7 +670,7 @@ function App() {
                     <tr>
                       <th className="py-3.5 px-3">#</th>
                       <th className="py-3.5 px-3">اسم المندوب</th>
-                      <th className="py-3.5 px-3">الهدف العام</th>
+                      <th className="py-3.5 px-3">الهدف العام (تعديل)</th>
                       <th className="py-3.5 px-3">المبيعات</th>
                       <th className="py-3.5 px-3">نسبة الإنجاز</th>
                       <th className="py-3.5 px-3">المتبقي للشرط</th>
@@ -654,10 +685,18 @@ function App() {
                   </thead>
                   <tbody className="divide-y divide-slate-700/60 font-mono">
                     {visibleReps.map((rep) => (
-                      <tr key={rep.id} className="hover:bg-slate-700/40">
+                      <tr key={rep.id} className={`hover:bg-slate-700/40 ${!rep.isActive ? 'opacity-35 bg-slate-950/60' : ''}`}>
                         <td className="py-3 px-3 text-slate-400">{rep.id}</td>
                         <td className="py-3 px-3 font-sans font-bold text-white">{rep.name}</td>
-                        <td className="py-3 px-3">{formatNum(rep.genTarget)}</td>
+                        <td className="py-3 px-3">
+                          <input
+                            type="number"
+                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                            value={rep.generalTarget}
+                            onChange={(e) => updateOfficialRepTarget(rep.id, e.target.value)}
+                            className="w-24 bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold disabled:opacity-70"
+                          />
+                        </td>
                         <td className="py-3 px-3 font-bold text-white">{formatNum(rep.genSales)}</td>
                         <td className="py-3 px-3">
                           <span className={`font-bold ${rep.passGate1_GeneralTarget ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -705,7 +744,7 @@ function App() {
           </div>
         )}
 
-        {/* Tab 2: الإعدادات الرسمية المعتمدة (للمدير والمشرف) */}
+        {/* Tab 2: الإعدادات الرسمية المعتمدة */}
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="space-y-6">
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-6">
@@ -718,16 +757,6 @@ function App() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  {currentUser.role === 'manager' && activeProposalInfo && monthStatus !== 'approved' && (
-                    <button
-                      onClick={handleAdoptProposal}
-                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/20"
-                    >
-                      <i className="fa-solid fa-file-import text-amber-300"></i>
-                      <span>استيراد مقترح المشرف 📥</span>
-                    </button>
-                  )}
-
                   {currentUser.role === 'manager' && monthStatus !== 'approved' && (
                     <button
                       onClick={handleSaveOfficialConfig}
@@ -775,7 +804,7 @@ function App() {
                 </div>
               </div>
 
-              {/* جدول المجموعات الـ 14 مع Checkbox */}
+              {/* جدول المجموعات الـ 14 */}
               <div className="space-y-3 pt-4 border-t border-slate-700">
                 <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
                   <i className="fa-solid fa-boxes-stacked"></i> شروط وعمولات المجموعات الـ 14 المعتمدة:
@@ -800,7 +829,11 @@ function App() {
                               type="checkbox"
                               disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
                               checked={grpRule.isActive !== false}
-                              onChange={(e) => updateOfficialGroup(idx, 'isActive', e.target.checked)}
+                              onChange={(e) => {
+                                const updated = [...groupRules];
+                                updated[idx] = { ...updated[idx], isActive: e.target.checked };
+                                setGroupRules(updated);
+                              }}
                               className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
                             />
                           </td>
@@ -811,7 +844,11 @@ function App() {
                               type="number"
                               disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
                               value={grpRule.thresholdPct ?? 70}
-                              onChange={(e) => updateOfficialGroup(idx, 'thresholdPct', e.target.value === '' ? '' : Number(e.target.value))}
+                              onChange={(e) => {
+                                const updated = [...groupRules];
+                                updated[idx] = { ...updated[idx], thresholdPct: e.target.value === '' ? '' : Number(e.target.value) };
+                                setGroupRules(updated);
+                              }}
                               className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-teal-300 font-bold disabled:opacity-50"
                             />
                           </td>
@@ -819,7 +856,11 @@ function App() {
                             <select
                               disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
                               value={grpRule.commType || 'fixed'}
-                              onChange={(e) => updateOfficialGroup(idx, 'commType', e.target.value)}
+                              onChange={(e) => {
+                                const updated = [...groupRules];
+                                updated[idx] = { ...updated[idx], commType: e.target.value };
+                                setGroupRules(updated);
+                              }}
                               className="bg-slate-800 border border-slate-700 text-slate-200 rounded p-1.5 text-xs disabled:opacity-50"
                             >
                               <option value="fixed">مبلغ ثابت (ر.س)</option>
@@ -831,7 +872,11 @@ function App() {
                               type="number"
                               disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !grpRule.isActive}
                               value={grpRule.commValue ?? 250}
-                              onChange={(e) => updateOfficialGroup(idx, 'commValue', e.target.value === '' ? '' : Number(e.target.value))}
+                              onChange={(e) => {
+                                const updated = [...groupRules];
+                                updated[idx] = { ...updated[idx], commValue: e.target.value === '' ? '' : Number(e.target.value) };
+                                setGroupRules(updated);
+                              }}
                               className="w-24 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold disabled:opacity-50"
                             />
                           </td>
@@ -841,116 +886,11 @@ function App() {
                   </table>
                 </div>
               </div>
-
-              {/* جدول شروط وعمولات التحصيل المنفصل */}
-              <div className="space-y-3 pt-4 border-t border-slate-700">
-                <h3 className="text-sm font-bold text-blue-400 flex items-center gap-2">
-                  <i className="fa-solid fa-hand-holding-dollar"></i> شروط وعمولات التحصيل (بعد استبعاد الديون المتعثرة):
-                </h3>
-                <div className="overflow-x-auto border border-slate-700 rounded-xl">
-                  <table className="w-full text-xs text-right bg-slate-900">
-                    <thead className="bg-slate-950 text-slate-300 border-b border-slate-700">
-                      <tr>
-                        <th className="p-3 text-center">تفعيل ✅</th>
-                        <th className="p-3">بند التحصيل</th>
-                        <th className="p-3">شرط نسبة التحصيل (%)</th>
-                        <th className="p-3">نوع العمولة</th>
-                        <th className="p-3">قيمة العمولة (ر.س / %)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 font-mono">
-                      <tr className={`hover:bg-slate-800/60 ${!generalRules.collectionRules?.under60?.isActive ? 'opacity-40' : ''}`}>
-                        <td className="p-3 text-center">
-                          <input
-                            type="checkbox"
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                            checked={generalRules.collectionRules?.under60?.isActive !== false}
-                            onChange={(e) => updateOfficialColl('under60', 'isActive', e.target.checked)}
-                            className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
-                          />
-                        </td>
-                        <td className="p-3 font-sans font-bold text-white">تحصيل ديون أقل من 60 يوماً</td>
-                        <td className="p-3">
-                          <input
-                            type="number"
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !generalRules.collectionRules?.under60?.isActive}
-                            value={generalRules.collectionRules?.under60?.thresholdPct ?? 30}
-                            onChange={(e) => updateOfficialColl('under60', 'thresholdPct', e.target.value === '' ? '' : Number(e.target.value))}
-                            className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-blue-300 font-bold"
-                          />
-                        </td>
-                        <td className="p-3 font-sans">
-                          <select
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !generalRules.collectionRules?.under60?.isActive}
-                            value={generalRules.collectionRules?.under60?.commType || 'percent'}
-                            onChange={(e) => updateOfficialColl('under60', 'commType', e.target.value)}
-                            className="bg-slate-800 border border-slate-700 text-slate-200 rounded p-1.5 text-xs"
-                          >
-                            <option value="percent">نسبة (% من التحصيل)</option>
-                            <option value="fixed">مبلغ ثابت (ر.س)</option>
-                          </select>
-                        </td>
-                        <td className="p-3">
-                          <input
-                            type="number"
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !generalRules.collectionRules?.under60?.isActive}
-                            value={generalRules.collectionRules?.under60?.commValue ?? 0.5}
-                            onChange={(e) => updateOfficialColl('under60', 'commValue', e.target.value === '' ? '' : Number(e.target.value))}
-                            className="w-24 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
-                          />
-                        </td>
-                      </tr>
-
-                      <tr className={`hover:bg-slate-800/60 ${!generalRules.collectionRules?.over60?.isActive ? 'opacity-40' : ''}`}>
-                        <td className="p-3 text-center">
-                          <input
-                            type="checkbox"
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                            checked={generalRules.collectionRules?.over60?.isActive !== false}
-                            onChange={(e) => updateOfficialColl('over60', 'isActive', e.target.checked)}
-                            className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
-                          />
-                        </td>
-                        <td className="p-3 font-sans font-bold text-white">تحصيل ديون فوق 60 يوماً (بعد استبعاد المتعثر)</td>
-                        <td className="p-3">
-                          <input
-                            type="number"
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !generalRules.collectionRules?.over60?.isActive}
-                            value={generalRules.collectionRules?.over60?.thresholdPct ?? 40}
-                            onChange={(e) => updateOfficialColl('over60', 'thresholdPct', e.target.value === '' ? '' : Number(e.target.value))}
-                            className="w-20 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-blue-300 font-bold"
-                          />
-                        </td>
-                        <td className="p-3 font-sans">
-                          <select
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !generalRules.collectionRules?.over60?.isActive}
-                            value={generalRules.collectionRules?.over60?.commType || 'percent'}
-                            onChange={(e) => updateOfficialColl('over60', 'commType', e.target.value)}
-                            className="bg-slate-800 border border-slate-700 text-slate-200 rounded p-1.5 text-xs"
-                          >
-                            <option value="percent">نسبة (% من التحصيل)</option>
-                            <option value="fixed">مبلغ ثابت (ر.س)</option>
-                          </select>
-                        </td>
-                        <td className="p-3">
-                          <input
-                            type="number"
-                            disabled={currentUser.role !== 'manager' || monthStatus === 'approved' || !generalRules.collectionRules?.over60?.isActive}
-                            value={generalRules.collectionRules?.over60?.commValue ?? 1.0}
-                            onChange={(e) => updateOfficialColl('over60', 'commValue', e.target.value === '' ? '' : Number(e.target.value))}
-                            className="w-24 bg-slate-800 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
-                          />
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             </div>
           </div>
         )}
 
-        {/* Tab 3: مطبخ التخطيط والمحاكاة التجريبية */}
+        {/* Tab 3: مطبخ التخطيط والمحاكاة التجريبية للمشرف */}
         {activeTab === 'proposals' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-2xl border border-purple-500/40 shadow-2xl space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
@@ -959,7 +899,7 @@ function App() {
                   <i className="fa-solid fa-kitchen-set text-purple-400"></i> مطبخ تخطيط ومحاكاة الأهداف (Sandbox)
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  تعديلاتك تُحفظ تلقائياً في جلستك، وعند الاستقرار اضغط "رفع مقترح المطبخ للإدارة".
+                  تعديلاتك على الأهداف والعمولات تُحفظ تلقائياً في جلستك، وعند الاستقرار اضغط "رفع مقترح المطبخ للإدارة".
                 </p>
               </div>
 
@@ -981,12 +921,13 @@ function App() {
               </div>
             </div>
 
+            {/* تعديل الأهداف العامة في المطبخ */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700">
                 <label className="text-xs font-bold text-purple-300 block mb-1">تجربة شرط الهدف العام (%)</label>
                 <input
                   type="number"
-                  value={kitchenGeneralRules.generalThresholdPct ?? 80}
+                  value={kitchenGeneralRules?.generalThresholdPct ?? 80}
                   onChange={(e) => setKitchenGeneralRules({ ...kitchenGeneralRules, generalThresholdPct: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full bg-slate-950 border border-purple-500/40 rounded-lg p-2 font-bold text-purple-300 text-center"
                 />
@@ -995,7 +936,7 @@ function App() {
                 <label className="text-xs font-bold text-purple-300 block mb-1">تجربة عمولة الهدف (ر.س)</label>
                 <input
                   type="number"
-                  value={kitchenGeneralRules.generalTargetCommValue ?? 500}
+                  value={kitchenGeneralRules?.generalTargetCommValue ?? 500}
                   onChange={(e) => setKitchenGeneralRules({ ...kitchenGeneralRules, generalTargetCommValue: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full bg-slate-950 border border-purple-500/40 rounded-lg p-2 font-bold text-amber-300 text-center font-mono"
                 />
@@ -1004,114 +945,33 @@ function App() {
                 <label className="text-xs font-bold text-purple-300 block mb-1">تجربة عدد المجموعات المطلوب</label>
                 <input
                   type="number"
-                  value={kitchenGeneralRules.minGroupsRequired ?? 7}
+                  value={kitchenGeneralRules?.minGroupsRequired ?? 7}
                   onChange={(e) => setKitchenGeneralRules({ ...kitchenGeneralRules, minGroupsRequired: e.target.value === '' ? '' : Number(e.target.value) })}
                   className="w-full bg-slate-950 border border-purple-500/40 rounded-lg p-2 font-bold text-teal-300 text-center"
                 />
               </div>
             </div>
 
-            {/* مجموعات المطبخ مع Checkbox */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {kitchenGroupRules.map((grp, idx) => (
-                <div key={idx} className={`bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3 ${!grp.isActive ? 'opacity-40' : ''}`}>
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={grp.isActive !== false}
-                        onChange={(e) => updateKitchenGroup(idx, 'isActive', e.target.checked)}
-                        className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
-                      />
-                      <span className="font-bold text-sm text-white">{grp.name}</span>
-                    </div>
-                    <span className="text-[10px] text-purple-300 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800">مجموعة {idx + 1}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+            {/* جدول أهداف المناديب في المطبخ */}
+            <div className="space-y-3 pt-4 border-t border-slate-700">
+              <h3 className="text-sm font-bold text-purple-300 flex items-center gap-2">
+                <i className="fa-solid fa-users-gear"></i> تعديل واقتراح أهداف المناديب العامة في المطبخ:
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {(kitchenRepsData || repsData).map((rep) => (
+                  <div key={rep.id} className="bg-slate-900 border border-slate-700 p-3 rounded-xl flex items-center justify-between">
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">شرط التأهل (%)</label>
-                      <input
-                        type="number"
-                        disabled={!grp.isActive}
-                        value={grp.thresholdPct ?? 70}
-                        onChange={(e) => updateKitchenGroup(idx, 'thresholdPct', e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-center font-bold text-teal-300 disabled:opacity-50"
-                      />
+                      <span className="font-bold text-white text-xs block">{rep.name}</span>
+                      <span className="text-[10px] text-slate-400">مندوب #{rep.id}</span>
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-1">قيمة العمولة (ر.س)</label>
-                      <input
-                        type="number"
-                        disabled={!grp.isActive}
-                        value={grp.commValue ?? 250}
-                        onChange={(e) => updateKitchenGroup(idx, 'commValue', e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-center font-bold text-emerald-400 disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* تجربة شروط التحصيل بالمطبخ */}
-            <div className="bg-slate-900 border border-purple-500/30 p-4 rounded-xl space-y-3">
-              <h3 className="text-xs font-bold text-purple-300">تجربة محاكاة شروط التحصيل:</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={kitchenGeneralRules.collectionRules?.under60?.isActive !== false}
-                      onChange={(e) => updateKitchenColl('under60', 'isActive', e.target.checked)}
-                      className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
-                    />
-                    <span className="text-white font-bold">تحصيل &lt; 60 يوم</span>
-                  </div>
-                  <div className="flex items-center gap-2">
                     <input
                       type="number"
-                      placeholder="%"
-                      value={kitchenGeneralRules.collectionRules?.under60?.thresholdPct ?? 30}
-                      onChange={(e) => updateKitchenColl('under60', 'thresholdPct', e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-blue-300"
-                    />
-                    <input
-                      type="number"
-                      placeholder="عمولة"
-                      value={kitchenGeneralRules.collectionRules?.under60?.commValue ?? 0.5}
-                      onChange={(e) => updateKitchenColl('under60', 'commValue', e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-emerald-400"
+                      value={rep.generalTarget}
+                      onChange={(e) => updateKitchenRepTarget(rep.id, e.target.value)}
+                      className="w-24 bg-slate-950 border border-purple-500/40 rounded p-1.5 text-center text-purple-300 font-mono font-bold text-xs"
                     />
                   </div>
-                </div>
-
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={kitchenGeneralRules.collectionRules?.over60?.isActive !== false}
-                      onChange={(e) => updateKitchenColl('over60', 'isActive', e.target.checked)}
-                      className="w-4 h-4 accent-purple-500 rounded cursor-pointer"
-                    />
-                    <span className="text-white font-bold">تحصيل &gt; 60 يوم (صافي)</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      placeholder="%"
-                      value={kitchenGeneralRules.collectionRules?.over60?.thresholdPct ?? 40}
-                      onChange={(e) => updateKitchenColl('over60', 'thresholdPct', e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-blue-300"
-                    />
-                    <input
-                      type="number"
-                      placeholder="عمولة"
-                      value={kitchenGeneralRules.collectionRules?.over60?.commValue ?? 1.0}
-                      onChange={(e) => updateKitchenColl('over60', 'commValue', e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-emerald-400"
-                    />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1184,6 +1044,102 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* نافذة مقارنة المقترح للمدير العام (Diff Viewer) */}
+      {showProposalDiffModal && parsedProposal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-800 border border-purple-500/50 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <i className="fa-solid fa-code-compare text-purple-400"></i> مقارنة مقترح المشرف مع القواعد الحالية
+              </h3>
+              <button onClick={() => setShowProposalDiffModal(false)} className="text-slate-400 hover:text-white">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-3 gap-3 text-xs text-center font-mono">
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                  <span className="text-slate-400 block mb-1">شرط الهدف العام</span>
+                  <div className="flex justify-center items-center gap-2">
+                    <span className="text-slate-400 line-through">{generalRules.generalThresholdPct}%</span>
+                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
+                    <span className="text-emerald-400 font-bold text-sm">{parsedProposal.generalRules?.generalThresholdPct}%</span>
+                  </div>
+                </div>
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                  <span className="text-slate-400 block mb-1">عمولة الهدف العام</span>
+                  <div className="flex justify-center items-center gap-2">
+                    <span className="text-slate-400 line-through">{generalRules.generalTargetCommValue}</span>
+                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
+                    <span className="text-amber-300 font-bold text-sm">{parsedProposal.generalRules?.generalTargetCommValue} ر.س</span>
+                  </div>
+                </div>
+                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
+                  <span className="text-slate-400 block mb-1">أدنى عدد مجموعات</span>
+                  <div className="flex justify-center items-center gap-2">
+                    <span className="text-slate-400 line-through">{generalRules.minGroupsRequired}</span>
+                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
+                    <span className="text-teal-300 font-bold text-sm">{parsedProposal.generalRules?.minGroupsRequired}</span>
+                  </div>
+                </div>
+              </div>
+
+              {parsedProposal.repsTargets && (
+                <div className="border border-slate-700 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs text-right bg-slate-900">
+                    <thead className="bg-slate-950 text-slate-400 font-bold">
+                      <tr>
+                        <th className="p-2.5">المندوب</th>
+                        <th className="p-2.5">الهدف الحالي</th>
+                        <th className="p-2.5">الهدف المقترح</th>
+                        <th className="p-2.5">الفارق</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 font-mono">
+                      {parsedProposal.repsTargets.map((rt) => {
+                        const currentRepData = repsData.find(r => Number(r.id) === Number(rt.id));
+                        const currentT = currentRepData ? currentRepData.generalTarget : 0;
+                        const diff = rt.generalTarget - currentT;
+                        return (
+                          <tr key={rt.id}>
+                            <td className="p-2.5 font-sans font-bold text-white">{rt.name}</td>
+                            <td className="p-2.5">{formatNum(currentT)}</td>
+                            <td className="p-2.5 font-bold text-purple-300">{formatNum(rt.generalTarget)}</td>
+                            <td className={`p-2.5 font-bold ${diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                              {diff > 0 ? `+${formatNum(diff)}` : formatNum(diff)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-700">
+              <span className="text-xs text-slate-400">مقدم المقترح: <b className="text-white">{activeProposalInfo.submittedBy}</b></span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowProposalDiffModal(false)}
+                  className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-xl text-xs"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleAdoptProposal}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+                >
+                  <i className="fa-solid fa-check"></i>
+                  <span>اعتماد وتطبيق هذا المقترح</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* نافذة تفاصيل المندوب */}
       {selectedRep && (
