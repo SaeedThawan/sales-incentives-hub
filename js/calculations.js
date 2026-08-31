@@ -1,5 +1,5 @@
 /**
- * محرك احتساب الأداء وبوابات الاستحقاق والمؤشرات المالية v11.0 Master
+ * محرك احتساب الأداء وبوابات الاستحقاق والمؤشرات المالية v12.0 Master
  */
 
 const CalcEngine = {
@@ -40,7 +40,6 @@ const CalcEngine = {
       const thresholdTargetSales = grpTarget * (thresholdPct / 100);
       const remainingToThreshold = grpTarget > 0 ? Math.max(0, thresholdTargetSales - grpSales) : 0;
       
-      // لا يُعد مؤهلاً ولا مكلفاً إلا إذا كان الهدف أكبر من صفر
       const isAssigned = grpTarget > 0;
       const isQualified = isGroupActive && isAssigned && (grpPct >= thresholdPct);
 
