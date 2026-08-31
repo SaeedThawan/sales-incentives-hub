@@ -1,6 +1,6 @@
 /**
  * محرك احتساب الأداء وبوابات الاستحقاق والتحصيل المتقدم ومؤشرات المطبخ
- * Enterprise Compensation & Planning Engine v8.0
+ * Enterprise Compensation & Planning Engine v8.1
  */
 
 const CalcEngine = {
@@ -28,7 +28,7 @@ const CalcEngine = {
     const passGate_GenTarget = genTarget > 0 ? (genPct >= genThresholdPct) : false;
     const remainingGenSales = genTarget > 0 ? Math.max(0, (genTarget * (genThresholdPct / 100)) - genSales) : 0;
 
-    // 2. بوابة المجموعات الـ 14 والتفكيك الفردي
+    // 2. بوابة المجموعات
     let qualifiedGroupsCount = 0;
     let failedMandatoryGroups = [];
     let rawGroupCommSum = 0;
@@ -54,7 +54,6 @@ const CalcEngine = {
         failedMandatoryGroups.push(rule.name);
       }
 
-      // العمولة المخصصة الفردية (Override) إن وجدت أو العامة
       const effectiveCommVal = (repGrp.customComm !== undefined && repGrp.customComm !== null && repGrp.customComm !== '')
         ? Number(repGrp.customComm)
         : Number(rule.commValue || 0);
@@ -96,7 +95,7 @@ const CalcEngine = {
     const passGate_MinGroupsCount = qualifiedGroupsCount >= minGroupsReq;
     const passGate_MandatoryGroups = failedMandatoryGroups.length === 0;
 
-    // 3. بوابة التحصيل وأعمار الديون (صافي بعد استبعاد المتعثر)
+    // 3. التحصيل
     const collRules = gRules.collectionRules || {
       isCollMandatory: false,
       over60: {
@@ -137,7 +136,7 @@ const CalcEngine = {
 
     const totalCollectionCommission = isRepActive ? (commUnder60Earned + commOver60Earned) : 0;
 
-    // 4. استحقاق العمولات التراكمي
+    // 4. استحقاق العمولات
     const meetsGenTargetReq = !isGenTargetMandatory || passGate_GenTarget;
     const meetsOver60Req = !isOver60Mandatory || passGate_Over60;
 
@@ -154,13 +153,12 @@ const CalcEngine = {
       commEarned: isEligibleForGroupCommissions ? grp.potentialComm : 0
     }));
 
-    // أسباب الحجب للشفافية
     let blockers = [];
     if (isGenTargetMandatory && !passGate_GenTarget) {
       blockers.push(`باقي للهدف العام ${Math.round(remainingGenSales).toLocaleString()} ر.س`);
     }
     if (isOver60Mandatory && !passGate_Over60) {
-      blockers.push(`تحصيل >60 يوم (${collOver60Pct.toFixed(1)}% < ${over60Threshold}%)`);
+      blockers.push(`تحصيل فوق 60 يوم (${collOver60Pct.toFixed(1)}% < ${over60Threshold}%)`);
     }
     if (!passGate_MandatoryGroups) {
       blockers.push(`أصناف إلزامية غير مكتملة: [${failedMandatoryGroups.join('، ')}]`);
@@ -246,7 +244,6 @@ const CalcEngine = {
     };
   },
 
-  // تحليل المطبخ التخطيطي الشامل
   calculateKitchenMetrics(groupRules, repsData) {
     return (groupRules || []).map((grp, gIdx) => {
       let totalTarget = 0;
@@ -295,6 +292,51 @@ const CalcEngine = {
         commCostFromSalesPct,
         isWeak
       };
+    });
+  },
+
+  analyzeAndSortGroups(groupRules, processedReps, sortBy = 'highestPct') {
+    const analytics = (groupRules || []).map((grpRule, gIdx) => {
+      let totalTarget = 0;
+      let totalSales = 0;
+      let qualifyingRepsCount = 0;
+      let totalEarnedComm = 0;
+
+      (processedReps || []).forEach(rep => {
+        if (rep.isActive !== false) {
+          const grp = rep.detailedGroups ? rep.detailedGroups[gIdx] : null;
+          if (grp && grp.isActive) {
+            totalTarget += grp.target || 0;
+            totalSales += grp.sales || 0;
+
+            if (grp.isQualified) {
+              qualifyingRepsCount++;
+              if (rep.isGroupsGateQualified) {
+                totalEarnedComm += grp.potentialComm;
+              }
+            }
+          }
+        }
+      });
+
+      const avgPct = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
+
+      return {
+        gIdx,
+        rule: grpRule,
+        totalTarget,
+        totalSales,
+        avgPct,
+        qualifyingRepsCount,
+        totalEarnedComm
+      };
+    });
+
+    return analytics.sort((a, b) => {
+      if (sortBy === 'highestPct') return b.avgPct - a.avgPct;
+      if (sortBy === 'highestSales') return b.totalSales - a.totalSales;
+      if (sortBy === 'lowestPct') return a.avgPct - b.avgPct;
+      return 0;
     });
   }
 };
