@@ -15,7 +15,7 @@ function App() {
   const [monthKey, setMonthKey] = useState('2026-08');
   const [monthStatus, setMonthStatus] = useState('open');
   const [activeProposalInfo, setActiveProposalInfo] = useState(null);
-  const [activeTab, setActiveTab] = useState('config'); // يبدأ من صفحة الإعدادات العقل المدبر
+  const [activeTab, setActiveTab] = useState('config');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRep, setSelectedRep] = useState(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
@@ -24,11 +24,10 @@ function App() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [analyticsSortBy, setAnalyticsSortBy] = useState('highestPct');
 
-  // التحكم في درج المطبخ
   const [expandedGroupIdx, setExpandedGroupIdx] = useState(null);
   const [selectedRepToAdd, setSelectedRepToAdd] = useState({});
 
-  // 1. القواعد الرسمية المعتمدة (العقل المدبر)
+  // القواعد الرسمية المعتمدة (العقل المدبر)
   const [generalRules, setGeneralRules] = useState({
     isGenTargetMandatory: true,
     generalThresholdPct: 80,
@@ -36,12 +35,9 @@ function App() {
     minGroupsRequired: 7,
     collectionRules: {
       isCollMandatory: false,
-      over60: {
-        isMandatory: false,
-        thresholdPct: 40,
-        tiers: [{ minPct: 40, rate: 0.01 }, { minPct: 50, rate: 0.02 }]
-      },
-      under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 }
+      thresholdPct: 30,
+      commType: 'percent',
+      commValue: 0.5
     }
   });
 
@@ -51,7 +47,7 @@ function App() {
 
   const [repsData, setRepsData] = useState([]);
 
-  // 2. مطبخ التخطيط والمحاكاة التجريبية للمشرف (Sandbox)
+  // المطبخ التجريبي
   const [kitchenGeneralRules, setKitchenGeneralRules] = useState(null);
   const [kitchenGroupRules, setKitchenGroupRules] = useState(null);
   const [kitchenRepsData, setKitchenRepsData] = useState(null);
@@ -94,16 +90,13 @@ function App() {
           const mergedRules = {
             isGenTargetMandatory: data.generalRules.isGenTargetMandatory !== false,
             generalThresholdPct: data.generalRules.generalThresholdPct ?? 80,
-            generalTargetCommValue: data.generalRules.generalTargetCommValue ?? 0,
+            generalTargetCommValue: (data.generalRules.generalTargetCommValue !== undefined && data.generalRules.generalTargetCommValue !== "") ? Number(data.generalRules.generalTargetCommValue) : 0,
             minGroupsRequired: data.generalRules.minGroupsRequired ?? 7,
             collectionRules: data.generalRules.collectionRules || {
               isCollMandatory: false,
-              over60: {
-                isMandatory: false,
-                thresholdPct: 40,
-                tiers: [{ minPct: 40, rate: 0.01 }, { minPct: 50, rate: 0.02 }]
-              },
-              under60: { isActive: true, thresholdPct: 30, commType: 'percent', commValue: 0.5 }
+              thresholdPct: 30,
+              commType: 'percent',
+              commValue: 0.5
             }
           };
           setGeneralRules(mergedRules);
@@ -135,7 +128,6 @@ function App() {
     if (currentUser) loadData(currentUser);
   }, []);
 
-  // تعديل الشروط الرسمية وحفظها فوراً (العقل المدبر)
   const handleSaveOfficialConfig = async () => {
     if (currentUser.role !== 'manager') {
       showToast('صلاحية الحفظ والتثبيت الرسمي للمدير العام فقط');
@@ -156,7 +148,6 @@ function App() {
     setSyncLoading(false);
   };
 
-  // رفع المقترح من المطبخ للإدارة
   const handleSaveSupervisorProposal = async () => {
     setSyncLoading(true);
     try {
@@ -175,7 +166,6 @@ function App() {
     setSyncLoading(false);
   };
 
-  // اعتماد مقترح المشرف بالكامل في القواعد الرسمية
   const handleAdoptProposal = () => {
     if (activeProposalInfo && activeProposalInfo.customRules) {
       try {
@@ -224,7 +214,6 @@ function App() {
     setRepsData(prev => prev.map(r => Number(r.id) === Number(repId) ? { ...r, generalTarget: val === '' ? '' : Number(val) } : r));
   };
 
-  // دوال المطبخ
   const updateKitchenGroupRule = (gIdx, field, val) => {
     const updated = JSON.parse(JSON.stringify(kitchenGroupRules || groupRules));
     updated[gIdx] = { ...updated[gIdx], [field]: val === '' ? '' : (field === 'thresholdPct' || field === 'commValue' ? Number(val) : val) };
@@ -385,7 +374,6 @@ function App() {
 
   return (
     <div className="pb-16 dir-rtl font-sans">
-      {/* الهيدر العلوي */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-md p-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -502,13 +490,12 @@ function App() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 mt-6">
-        {/* شريط الإجماليات التنفيذية */}
         {currentUser.role !== 'rep' && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 font-mono">
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">المبيعات العامة</span>
               <span className="text-base font-extrabold text-white">{formatNum(companyTotals.genSales)}</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">هدف {formatNum(companyTotals.genTarget)}</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">هدف {formatNum(companyTotals.genTarget)}</span>
             </div>
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">نسبة الإنجاز</span>
@@ -530,7 +517,7 @@ function App() {
             <div className="bg-slate-800 border border-slate-700 p-3.5 rounded-2xl">
               <span className="text-slate-400 text-xs block mb-1 font-sans">عمولة التحصيل</span>
               <span className="text-base font-extrabold text-blue-300">{formatNum(companyTotals.collComm)} ر.س</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5 font-mono">({companyTotals.overallCollPct.toFixed(1)}% من الدين)</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">({companyTotals.overallCollPct.toFixed(1)}% من الدين)</span>
             </div>
             <div className="bg-slate-800 border border-emerald-500/40 bg-emerald-950/20 p-3.5 rounded-2xl">
               <span className="text-emerald-300 text-xs font-bold mb-1 font-sans">إجمالي العمولات المستحقة</span>
@@ -539,9 +526,7 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 1: إعدادات البوابات والتحصيل الرسمية (العقل المدبر) */}
-        {/* ========================================================================= */}
+        {/* TAB 1: إعدادات البوابات والتحصيل الرسمية */}
         {activeTab === 'config' && currentUser.role !== 'rep' && (
           <div className="space-y-6">
             <div className="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-6">
@@ -550,7 +535,7 @@ function App() {
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
                     <i className="fa-solid fa-sliders text-amber-400"></i> إدارة بوابات الاستحقاق وشروط العمولات الرسمية
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في جعل الشروط أساسية أو اختيارية وتحديد نسب التأهل (الحساب لحظي ومباشر)</p>
+                  <p className="text-xs text-slate-400 mt-0.5">تحكم كامل في جعل الشروط أساسية أو اختيارية وتحديد نسب التأهل</p>
                 </div>
                 
                 <div className="flex items-center gap-2">
@@ -576,7 +561,7 @@ function App() {
                 </div>
               </div>
 
-              {/* 1. بوابة الهدف العام */}
+              {/* بوابة الهدف العام */}
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
                 <div className="flex items-center gap-2">
                   <input
@@ -623,7 +608,7 @@ function App() {
                 </div>
               </div>
 
-              {/* 2. جدول المجموعات الـ 14 */}
+              {/* جدول المجموعات الـ 14 */}
               <div className="space-y-3 pt-2">
                 <h3 className="text-sm font-bold text-teal-400 flex items-center gap-2">
                   <i className="fa-solid fa-boxes-stacked"></i> شروط المجموعات الـ 14 (تحديد المجموعات الإلزامية الأساسية ⭐):
@@ -720,55 +705,42 @@ function App() {
                 </div>
               </div>
 
-              {/* 3. بوابات وشرائح التحصيل */}
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                    checked={generalRules.collectionRules?.over60?.isMandatory !== false}
-                    onChange={(e) => {
-                      setGeneralRules({
-                        ...generalRules,
-                        collectionRules: {
-                          ...generalRules.collectionRules,
-                          over60: { ...generalRules.collectionRules.over60, isMandatory: e.target.checked }
-                        }
-                      });
-                    }}
-                    className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
-                  />
-                  <span className="font-bold text-white text-sm">
-                    تفعيل شرط تحصيل ديون فوق 60 يوماً كبوابة أساسية (بعد استبعاد المتعثرات)
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block mb-1 font-sans">شرط نسبة التأهل لتحصيل فوق 60 يوم (%)</span>
+              {/* شروط وعمولات التحصيل الصافي */}
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+                <h3 className="text-xs font-bold text-blue-300">شروط وعمولة التحصيل الإجمالي (صافي بعد استبعاد المتعثرات):</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block mb-1 font-sans">شرط نسبة التحصيل الصافي (%)</span>
                     <input
                       type="number"
                       disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
-                      value={generalRules.collectionRules?.over60?.thresholdPct ?? 40}
+                      value={generalRules.collectionRules?.thresholdPct ?? 30}
                       onChange={(e) => {
                         setGeneralRules({
                           ...generalRules,
-                          collectionRules: {
-                            ...generalRules.collectionRules,
-                            over60: { ...generalRules.collectionRules.over60, thresholdPct: Number(e.target.value) }
-                          }
+                          collectionRules: { ...generalRules.collectionRules, thresholdPct: Number(e.target.value) }
                         });
                       }}
-                      className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-center text-blue-300 font-bold"
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-blue-300 font-bold"
                     />
                   </div>
-                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 block mb-1 font-sans">شرائح عمولة التحصيل فوق 60 يوم:</span>
-                    <span className="text-slate-300 block text-[11px] font-sans">
-                      • عند تحقيق نسبة 40% فأكثر: عمولة <b>1.0%</b> من التحصيل
-                      <br/>
-                      • عند تحقيق نسبة 50% فأكثر: عمولة <b>2.0%</b> من التحصيل
-                    </span>
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 block mb-1 font-sans">قيمة عمولة التحصيل (% أو ر.س)</span>
+                    <input
+                      type="number"
+                      disabled={currentUser.role !== 'manager' || monthStatus === 'approved'}
+                      value={generalRules.collectionRules?.commValue ?? 0.5}
+                      onChange={(e) => {
+                        setGeneralRules({
+                          ...generalRules,
+                          collectionRules: { ...generalRules.collectionRules, commValue: Number(e.target.value) }
+                        });
+                      }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-emerald-400 font-bold"
+                    />
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-center font-sans text-slate-300">
+                    <span>تحتسب كنسبة من التحصيل الصافي</span>
                   </div>
                 </div>
               </div>
@@ -776,9 +748,7 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 2: المطبخ الرئيسي لتخطيط الأهداف والعمولات (Planning Kitchen) */}
-        {/* ========================================================================= */}
+        {/* TAB 2: المطبخ الرئيسي */}
         {activeTab === 'kitchen' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-3xl border border-purple-500/40 shadow-2xl space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
@@ -994,9 +964,7 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* TAB 3: خلاصة المندوبين وبوابات الاستحقاق (Summary Table) */}
-        {/* ========================================================================= */}
+        {/* TAB 3: خلاصة المندوبين */}
         {activeTab === 'summary' && currentUser.role !== 'rep' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
@@ -1109,9 +1077,7 @@ function App() {
           </div>
         )}
 
-        {/* ========================================================================= */}
         {/* TAB 4: التحليل المالي للمجموعات */}
-        {/* ========================================================================= */}
         {activeTab === 'analytics' && currentUser.role !== 'rep' && (
           <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700 pb-4">
@@ -1153,102 +1119,6 @@ function App() {
           </div>
         )}
       </main>
-
-      {/* نافذة مقارنة مقترح المشرف مع القواعد الرسمية للمدير العام (Diff Viewer) */}
-      {showProposalDiffModal && parsedProposal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-800 border border-purple-500/50 rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <i className="fa-solid fa-code-compare text-purple-400"></i> مقارنة مقترح المشرف مع القواعد الحالية
-              </h3>
-              <button onClick={() => setShowProposalDiffModal(false)} className="text-slate-400 hover:text-white">
-                <i className="fa-solid fa-xmark text-lg"></i>
-              </button>
-            </div>
-
-            <div className="space-y-4 max-h-96 overflow-y-auto font-sans">
-              <div className="grid grid-cols-3 gap-3 text-xs text-center font-mono">
-                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                  <span className="text-slate-400 block mb-1 font-sans">شرط الهدف العام</span>
-                  <div className="flex justify-center items-center gap-2">
-                    <span className="text-slate-400 line-through">{generalRules.generalThresholdPct}%</span>
-                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
-                    <span className="text-emerald-400 font-bold text-sm">{parsedProposal.generalRules?.generalThresholdPct}%</span>
-                  </div>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                  <span className="text-slate-400 block mb-1 font-sans">عمولة الهدف العام</span>
-                  <div className="flex justify-center items-center gap-2">
-                    <span className="text-slate-400 line-through">{generalRules.generalTargetCommValue}</span>
-                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
-                    <span className="text-amber-300 font-bold text-sm">{parsedProposal.generalRules?.generalTargetCommValue} ر.س</span>
-                  </div>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-xl border border-slate-700">
-                  <span className="text-slate-400 block mb-1 font-sans">أدنى عدد مجموعات</span>
-                  <div className="flex justify-center items-center gap-2">
-                    <span className="text-slate-400 line-through">{generalRules.minGroupsRequired}</span>
-                    <i className="fa-solid fa-arrow-left text-purple-400"></i>
-                    <span className="text-teal-300 font-bold text-sm">{parsedProposal.generalRules?.minGroupsRequired}</span>
-                  </div>
-                </div>
-              </div>
-
-              {parsedProposal.repsTargets && (
-                <div className="border border-slate-700 rounded-xl overflow-hidden">
-                  <table className="w-full text-xs text-right bg-slate-900">
-                    <thead className="bg-slate-950 text-slate-400 font-bold">
-                      <tr>
-                        <th className="p-2.5">المندوب</th>
-                        <th className="p-2.5">الهدف الحالي</th>
-                        <th className="p-2.5">الهدف المقترح</th>
-                        <th className="p-2.5">الفارق</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 font-mono">
-                      {parsedProposal.repsTargets.map((rt) => {
-                        const currentRepData = repsData.find(r => Number(r.id) === Number(rt.id));
-                        const currentT = currentRepData ? currentRepData.generalTarget : 0;
-                        const diff = rt.generalTarget - currentT;
-                        return (
-                          <tr key={rt.id}>
-                            <td className="p-2.5 font-sans font-bold text-white">{rt.name}</td>
-                            <td className="p-2.5">{formatNum(currentT)}</td>
-                            <td className="p-2.5 font-bold text-purple-300">{formatNum(rt.generalTarget)}</td>
-                            <td className={`p-2.5 font-bold ${diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
-                              {diff > 0 ? `+${formatNum(diff)}` : formatNum(diff)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center pt-3 border-t border-slate-700 font-sans">
-              <span className="text-xs text-slate-400">مقدم المقترح: <b className="text-white">{activeProposalInfo.submittedBy}</b></span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowProposalDiffModal(false)}
-                  className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-4 py-2 rounded-xl text-xs"
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={handleAdoptProposal}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
-                >
-                  <i className="fa-solid fa-check"></i>
-                  <span>اعتماد وتطبيق هذا المقترح</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* نافذة تفاصيل أداء المندوب */}
       {selectedRep && (
